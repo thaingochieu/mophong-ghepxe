@@ -132,9 +132,13 @@
     const gearReverse = document.getElementById('gearReverse');
     const warningMsg = document.getElementById('warningMsg');
     const carImage = document.getElementById('carImg');
+    const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
 
     // TỶ LỆ CHUYỂN ĐỔI: 1 mét = 45 pixels
     const SCALE = 45; 
+    // Khoảng dư của chuồng so với xe (m) để giữ tỉ lệ trực quan hợp lý
+    const PARKING_CLEARANCE_LENGTH_M = 0.6;
+    const PARKING_CLEARANCE_WIDTH_M = 0.6;
 
     // Các biến Kích thước & Môi trường
     let CAR_A = 4;
@@ -194,17 +198,25 @@
     const COLLISION_SIDE_SCALE = 0.72;  // Nửa bề rộng xe
     const SHOW_HITBOX_DEBUG = false;    // Bật true để vẽ hitbox kiểm tra trực quan
 
+    // Đường căn mờ bám theo xe (tọa độ local theo tâm xe)
+    // +localX: về phía đầu xe, -localX: về phía đuôi xe
+    // +localY: lệch xuống dưới ảnh, -localY: lệch lên trên ảnh
+    const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 }; // Vị trí vô lăng theo tỷ lệ carW/carH
+    const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 }; // Vị trí ghế lái theo tỷ lệ carW/carH
+
     // Giữ trạng thái "Thẳng lái" trước khi chuyển trái/phải (đơn vị: giây)
     const STRAIGHT_STEER_HOLD_SEC = 0.5; // <-- Bạn có thể tự chỉnh tại đây
     const STEER_NEUTRAL_THRESHOLD = 0.05;
     let steerUIState = 'straight';
     let steerHoldUntilMs = 0;
     let wasInNeutralZone = true;
+    let hasParkingSuccess = false;
+    let hasExerciseCompleted = false;
 
     // Hàm tính toán Hình học toàn bộ bản đồ
     function calculateEnvironment() {
-        const Ld_m = CAR_A + 1.0;
-        const Rd_m = CAR_B + 0.6;
+        const Ld_m = CAR_A + PARKING_CLEARANCE_LENGTH_M;
+        const Rd_m = CAR_B + PARKING_CLEARANCE_WIDTH_M;
         const Ed_m = 1.2 * CAR_A;
 
         ENV.carW = CAR_A * SCALE; 
@@ -273,6 +285,8 @@
         car.angle = Math.PI / 2; // Hướng xuống (90 độ)
         car.steeringTurns = 0;
         car.isMoving = false;
+        hasParkingSuccess = false;
+        hasExerciseCompleted = false;
         warningMsg.style.display = 'none'; // Ẩn thông báo đè vạch nếu có
     }
 
@@ -376,6 +390,145 @@
             { x: cx - rear*cos + halfSide*sin, y: cy - rear*sin - halfSide*cos },   // Phải Trên (Đuôi)
             { x: cx - rear*cos - halfSide*sin, y: cy - rear*sin + halfSide*cos }    // Trái Trên (Đuôi)
         ];
+    }
+
+    function carLocalToWorld(localX, localY, cx = car.x, cy = car.y, cangle = car.angle) {
+        const cos = Math.cos(cangle);
+        const sin = Math.sin(cangle);
+        return {
+            x: cx + localX * cos - localY * sin,
+            y: cy + localX * sin + localY * cos
+        };
+    }
+
+    function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+        const vx = x2 - x1;
+        const vy = y2 - y1;
+        const wx = px - x1;
+        const wy = py - y1;
+        const c1 = vx * wx + vy * wy;
+        if (c1 <= 0) return Math.hypot(px - x1, py - y1);
+        const c2 = vx * vx + vy * vy;
+        if (c2 <= c1) return Math.hypot(px - x2, py - y2);
+        const t = c1 / c2;
+        const projX = x1 + t * vx;
+        const projY = y1 + t * vy;
+        return Math.hypot(px - projX, py - projY);
+    }
+
+    function isCarInsideRightVerticalRoad() {
+        const marginX = ENV.carH * 0.35;
+        const marginY = ENV.carW * 0.35;
+        return (
+            car.x >= ENV.rightRoadLeft + marginX &&
+            car.x <= ENV.rightRoadRight - marginX &&
+            car.y >= ENV.rightRoadTop + marginY &&
+            car.y <= ENV.rightRoadBottom - marginY
+        );
+    }
+
+    function updateParkingMilestones(isHittingBorder, isHittingYellowLine) {
+        if (isHittingBorder || isHittingYellowLine) return;
+
+        const inSpotArea = (
+            car.x >= ENV.spotBorderLeft && car.x <= ENV.spotBorderRight &&
+            car.y >= ENV.roadBottom && car.y <= ENV.spotBorderBottom
+        );
+
+        if (!hasParkingSuccess && inSpotArea) {
+            const corners = getCarCorners();
+            const rearLeft = corners[3];
+            const rearRight = corners[2];
+            const bottomLine = yellowLines[2];
+
+            const d1 = pointToSegmentDistance(rearLeft.x, rearLeft.y, bottomLine.x1, bottomLine.y1, bottomLine.x2, bottomLine.y2);
+            const d2 = pointToSegmentDistance(rearRight.x, rearRight.y, bottomLine.x1, bottomLine.y1, bottomLine.x2, bottomLine.y2);
+            const rearToBottomLineM = Math.min(d1, d2) / SCALE;
+
+            if (rearToBottomLineM >= 0.1 && rearToBottomLineM <= 0.3) {
+                hasParkingSuccess = true;
+            }
+        }
+
+        if (hasParkingSuccess && !hasExerciseCompleted && isCarInsideRightVerticalRoad()) {
+            hasExerciseCompleted = true;
+        }
+    }
+
+    function prepareCarImageCrop() {
+        if (!carImage.complete || carImage.naturalWidth <= 0 || carImage.naturalHeight <= 0) return;
+        if (carImageCrop.ready) return;
+
+        const w = carImage.naturalWidth;
+        const h = carImage.naturalHeight;
+        const off = document.createElement('canvas');
+        off.width = w;
+        off.height = h;
+        const offCtx = off.getContext('2d');
+        offCtx.drawImage(carImage, 0, 0);
+        const data = offCtx.getImageData(0, 0, w, h).data;
+
+        let minX = w, minY = h, maxX = -1, maxY = -1;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const alpha = data[(y * w + x) * 4 + 3];
+                if (alpha > 12) {
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+
+        if (maxX >= minX && maxY >= minY) {
+            carImageCrop.sx = minX;
+            carImageCrop.sy = minY;
+            carImageCrop.sw = maxX - minX + 1;
+            carImageCrop.sh = maxY - minY + 1;
+        } else {
+            carImageCrop.sx = 0;
+            carImageCrop.sy = 0;
+            carImageCrop.sw = w;
+            carImageCrop.sh = h;
+        }
+        carImageCrop.ready = true;
+    }
+
+    // Vẽ đường vô hạn đi qua 1 điểm theo hướng dir, sau đó cắt trong bbox map
+    function drawClippedGuideLine(px, py, dx, dy, minX, minY, maxX, maxY) {
+        const EPS = 1e-6;
+        const hits = [];
+
+        if (Math.abs(dx) > EPS) {
+            const tLeft = (minX - px) / dx;
+            const yLeft = py + tLeft * dy;
+            if (yLeft >= minY - EPS && yLeft <= maxY + EPS) hits.push({ x: minX, y: yLeft, t: tLeft });
+
+            const tRight = (maxX - px) / dx;
+            const yRight = py + tRight * dy;
+            if (yRight >= minY - EPS && yRight <= maxY + EPS) hits.push({ x: maxX, y: yRight, t: tRight });
+        }
+
+        if (Math.abs(dy) > EPS) {
+            const tTop = (minY - py) / dy;
+            const xTop = px + tTop * dx;
+            if (xTop >= minX - EPS && xTop <= maxX + EPS) hits.push({ x: xTop, y: minY, t: tTop });
+
+            const tBottom = (maxY - py) / dy;
+            const xBottom = px + tBottom * dx;
+            if (xBottom >= minX - EPS && xBottom <= maxX + EPS) hits.push({ x: xBottom, y: maxY, t: tBottom });
+        }
+
+        if (hits.length < 2) return;
+        hits.sort((a, b) => a.t - b.t);
+        const p1 = hits[0];
+        const p2 = hits[hits.length - 1];
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
     }
 
     function updateSteeringUIState(timeMs) {
@@ -492,7 +645,9 @@
             }
         }
 
-        // 3. Hiển thị thông báo trên màn hình
+        // 3. Cập nhật milestone và hiển thị thông báo trên màn hình
+        updateParkingMilestones(isHittingBorder, isHittingYellowLine);
+
         if (isHittingBorder) {
             warningMsg.innerText = "⚠️ XE CHẠM LỀ ⚠️";
             warningMsg.style.backgroundColor = "#991b1b"; // Đỏ sậm
@@ -500,6 +655,14 @@
         } else if (isHittingYellowLine) {
             warningMsg.innerText = "⚠️ XE ĐÈ VẠCH ⚠️";
             warningMsg.style.backgroundColor = "#ef4444"; // Đỏ tươi
+            warningMsg.style.display = 'block';
+        } else if (hasExerciseCompleted) {
+            warningMsg.innerText = "🎉 HOÀN THÀNH BÀI GHÉP XE 🎉";
+            warningMsg.style.backgroundColor = "#065f46";
+            warningMsg.style.display = 'block';
+        } else if (hasParkingSuccess) {
+            warningMsg.innerText = "✅ GHÉP XE THÀNH CÔNG ✅";
+            warningMsg.style.backgroundColor = "#15803d";
             warningMsg.style.display = 'block';
         } else {
             warningMsg.style.display = 'none';
@@ -584,7 +747,16 @@
         ctx.rotate(car.angle);
         
         if (carImage.complete && carImage.naturalWidth > 0) {
-            ctx.drawImage(carImage, -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+            prepareCarImageCrop();
+            if (carImageCrop.ready) {
+                ctx.drawImage(
+                    carImage,
+                    carImageCrop.sx, carImageCrop.sy, carImageCrop.sw, carImageCrop.sh,
+                    -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH
+                );
+            } else {
+                ctx.drawImage(carImage, -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+            }
         } else {
             ctx.fillStyle = 'red';
             ctx.fillRect(-ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
@@ -592,6 +764,49 @@
             ctx.fillRect(ENV.carW/2 - 10, -ENV.carH/2, 10, ENV.carH);
         }
 
+        ctx.restore();
+
+        // -- VẼ 2 ĐƯỜNG CĂN MỜ (bám theo xe) --
+        const mapMinX = ENV.mapLeft;
+        const mapMaxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
+        const mapMinY = Math.min(ENV.roadTop, ENV.rightRoadTop);
+        const mapMaxY = Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom);
+
+        const steeringPos = carLocalToWorld(
+            ENV.carW * STEERING_LOCAL_RATIO.x,
+            ENV.carH * STEERING_LOCAL_RATIO.y
+        );
+        const driverSeatPos = carLocalToWorld(
+            ENV.carW * DRIVER_SEAT_LOCAL_RATIO.x,
+            ENV.carH * DRIVER_SEAT_LOCAL_RATIO.y
+        );
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.72)'; // vàng nhạt
+        ctx.lineWidth = 1;
+        ctx.setLineDash([7, 7]);
+
+        // Đồng bộ theo góc xe: dọc theo trục thân xe, ngang vuông góc thân xe
+        const dirLongX = Math.cos(car.angle);
+        const dirLongY = Math.sin(car.angle);
+        const dirSideX = -Math.sin(car.angle);
+        const dirSideY = Math.cos(car.angle);
+
+        // Đường căn dọc qua vị trí vô lăng
+        drawClippedGuideLine(
+            steeringPos.x, steeringPos.y,
+            dirLongX, dirLongY,
+            mapMinX, mapMinY, mapMaxX, mapMaxY
+        );
+
+        // Đường căn ngang qua vị trí ghế lái
+        drawClippedGuideLine(
+            driverSeatPos.x, driverSeatPos.y,
+            dirSideX, dirSideY,
+            mapMinX, mapMinY, mapMaxX, mapMaxY
+        );
+
+        ctx.setLineDash([]);
         ctx.restore();
 
         if (SHOW_HITBOX_DEBUG) {
@@ -629,6 +844,11 @@
         calculateMapOffset();
     }
     window.addEventListener('resize', resizeCanvas);
+    if (carImage.complete) {
+        prepareCarImageCrop();
+    } else {
+        carImage.addEventListener('load', prepareCarImageCrop);
+    }
     // Gọi resize khi load xong dashboard
     window.onload = () => {
         resizeCanvas();
