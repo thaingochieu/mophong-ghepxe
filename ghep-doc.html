@@ -8,12 +8,20 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a202c; color: white; font-family: sans-serif; }
         
-        /* Bảng điều khiển nằm ngang trên cùng */
-        .dashboard { 
-            background: #2d3748; 
-            border-bottom: 2px solid #4a5568; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        /* Bảng điều khiển dọc bên phải */
+        .dashboard {
+            background: #2d3748;
+            border-left: 2px solid #4a5568;
+            box-shadow: -4px 0 6px rgba(0,0,0,0.3);
             z-index: 20;
+            height: 100vh;
+            width: 340px;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding-top: 32px;
+            padding-bottom: 32px;
         }
         
         canvas { 
@@ -42,13 +50,12 @@
         .kbd { background: #1a202c; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.85em; border-bottom: 1px solid #000; color: #63b3ed;}
     </style>
 </head>
-<body class="flex flex-col h-screen w-screen">
+<body class="flex flex-row h-screen w-screen">
 
-    <!-- Bảng điều khiển (Ngang, trên cùng) -->
-    <div class="dashboard w-full px-6 py-3 flex justify-between items-center gap-4">
-        
+    <!-- Bảng điều khiển (Dọc, bên phải) -->
+    <div class="dashboard">
         <!-- Cụm 1: Vô lăng, Cần số & Thông số -->
-        <div class="flex items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-600">
+        <div class="flex flex-col items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-600 mx-4">
             <div class="flex flex-col items-center gap-1.5">
                 <div class="wheel-container">
                     <img id="wheelImg" src="steering_wheel.png" class="wheel" alt="Vô lăng">
@@ -64,7 +71,7 @@
         </div>
 
         <!-- Cụm 2: Cấu hình Kích thước & Tốc độ -->
-        <div class="flex gap-6 bg-gray-800 p-3 rounded-lg border border-gray-600">
+        <div class="flex flex-col gap-6 bg-gray-800 p-3 rounded-lg border border-gray-600 mx-4">
             <!-- Cột Tốc độ -->
             <div class="flex flex-col gap-2">
                 <div class="flex flex-col">
@@ -81,14 +88,14 @@
                 <div class="flex justify-between items-center gap-2">
                     <label class="text-xs text-green-300">Dài xe (a):</label>
                     <div class="flex items-center">
-                        <input type="number" id="cfgCarA" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="3.5" max="6.0" step="0.1" value="4.5">
+                        <input type="number" id="cfgCarA" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="3.5" max="6.0" step="0.1" value="4">
                         <span class="ml-1 text-xs text-gray-400">m</span>
                     </div>
                 </div>
                 <div class="flex justify-between items-center gap-2">
                     <label class="text-xs text-green-300">Rộng xe (b):</label>
                     <div class="flex items-center">
-                        <input type="number" id="cfgCarB" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="1.4" max="2.4" step="0.1" value="1.8">
+                        <input type="number" id="cfgCarB" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="1.4" max="2.4" step="0.1" value="2">
                         <span class="ml-1 text-xs text-gray-400">m</span>
                     </div>
                 </div>
@@ -96,7 +103,7 @@
         </div>
 
         <!-- Cụm 4: Hướng dẫn -->
-        <div class="bg-gray-800 p-3 rounded-lg border border-gray-600 text-[13px] text-gray-300 leading-relaxed">
+        <div class="bg-gray-800 p-3 rounded-lg border border-gray-600 text-[13px] text-gray-300 leading-relaxed mx-4">
             <span class="kbd">A</span> / <span class="kbd">D</span> : Quay vô lăng trái/phải <br>
             <span class="kbd">Cuộn ↑↓</span> : Sang số Tiến/Lùi <br>
             <span class="kbd">Giữ Chuột Trái</span> : Đạp ga (Di chuyển)
@@ -108,7 +115,7 @@
         <div id="warningMsg" class="warning-overlay" style="background-color: #ef4444; color: white;">
             ⚠️ XE ĐÈ VẠCH ⚠️
         </div>
-        <canvas id="gameCanvas" width="1000" height="700"></canvas>
+        <canvas id="gameCanvas" style="width:100%;height:100%;display:block;"></canvas>
     </div>
 
     <!-- Load xe -->
@@ -130,11 +137,38 @@
     const SCALE = 45; 
 
     // Các biến Kích thước & Môi trường
-    let CAR_A = 4.5;
-    let CAR_B = 1.8;
+    let CAR_A = 4;
+    let CAR_B = 2;
     let ENV = {};
     let yellowLines = [];
     let borderLines = []; // Thêm mảng chứa các đường bao quanh map để chặn xe
+
+        // Offset để căn giữa bản đồ trên canvas
+        let mapOffsetX = 0, mapOffsetY = 0;
+
+        // Hàm tính toán offset để căn giữa map vào canvas
+        function calculateMapOffset() {
+            // Xác định bounding box của map
+            // Lấy các giá trị min/max của các điểm đặc trưng
+            const minX = ENV.mapLeft;
+            const maxX = Math.max(
+                ENV.rightRoadRight,
+                ENV.spotBorderRight
+            );
+            const minY = Math.min(
+                ENV.roadTop,
+                ENV.rightRoadTop
+            );
+            const maxY = Math.max(
+                ENV.rightRoadBottom,
+                ENV.spotBorderBottom
+            );
+            const mapWidth = maxX - minX;
+            const mapHeight = maxY - minY;
+            // Căn giữa map trong canvas
+            mapOffsetX = (canvas.width - mapWidth) / 2 - minX;
+            mapOffsetY = (canvas.height - mapHeight) / 2 - minY;
+        }
 
     const GAME_CONFIG = {
         moveSpeed: 1.5, 
@@ -238,12 +272,16 @@
 
     // Lắng nghe thay đổi Cấu hình
     document.getElementById('cfgCarA').oninput = (e) => { 
-        CAR_A = parseFloat(e.target.value) || 4.5; 
-        calculateEnvironment(); resetCarPosition();
+        CAR_A = parseFloat(e.target.value) || 3.5; 
+        calculateEnvironment();
+        calculateMapOffset();
+        resetCarPosition();
     };
     document.getElementById('cfgCarB').oninput = (e) => { 
         CAR_B = parseFloat(e.target.value) || 1.8; 
-        calculateEnvironment(); resetCarPosition();
+        calculateEnvironment();
+        calculateMapOffset();
+        resetCarPosition();
     };
     document.getElementById('cfgMoveSpeed').oninput = (e) => { 
         document.getElementById('valMove').innerText = e.target.value; GAME_CONFIG.moveSpeed = parseFloat(e.target.value); 
@@ -434,7 +472,8 @@
         // Nền cỏ
         ctx.fillStyle = '#16a34a'; 
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+        ctx.save();
+        ctx.translate(mapOffsetX, mapOffsetY);
         // -- VẼ PATH BAO QUANH BẢN ĐỒ --
         ctx.beginPath();
         ctx.moveTo(ENV.mapLeft, ENV.roadTop); // Bắt đầu từ góc trái trên đường ngang
@@ -514,6 +553,9 @@
             ctx.fillRect(ENV.carW/2 - 10, -ENV.carH/2, 10, ENV.carH);
         }
         ctx.restore();
+
+        // Khôi phục transform gốc của canvas, tránh bị cộng dồn qua các frame
+        ctx.restore();
     }
 
     function gameLoop(time) {
@@ -522,7 +564,18 @@
         requestAnimationFrame(gameLoop);
     }
 
+    function resizeCanvas() {
+        const canvasContainer = canvas.parentElement;
+        // Lấy kích thước vùng trống (trừ dashboard)
+        const rect = canvasContainer.getBoundingClientRect();
+        canvas.width = Math.floor(rect.width);
+        canvas.height = Math.floor(rect.height);
+        calculateMapOffset();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    // Gọi resize khi load xong dashboard
     window.onload = () => {
+        resizeCanvas();
         updateGearUI();
         requestAnimationFrame(gameLoop);
     };
