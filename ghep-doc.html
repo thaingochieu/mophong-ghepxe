@@ -187,6 +187,20 @@
 
     const keys = { A: false, D: false };
 
+    // Tinh chỉnh hitbox va chạm để sát thân xe hơn (tính theo tỷ lệ kích thước xe)
+    // Các hệ số này tự scale theo CAR_A/CAR_B khi bạn đổi kích thước xe.
+    const COLLISION_FRONT_SCALE = 0.80; // Nửa đầu xe (mũi)
+    const COLLISION_REAR_SCALE = 0.72;  // Nửa đuôi xe (ảnh thường có đổ bóng/viền)
+    const COLLISION_SIDE_SCALE = 0.72;  // Nửa bề rộng xe
+    const SHOW_HITBOX_DEBUG = false;    // Bật true để vẽ hitbox kiểm tra trực quan
+
+    // Giữ trạng thái "Thẳng lái" trước khi chuyển trái/phải (đơn vị: giây)
+    const STRAIGHT_STEER_HOLD_SEC = 0.5; // <-- Bạn có thể tự chỉnh tại đây
+    const STEER_NEUTRAL_THRESHOLD = 0.05;
+    let steerUIState = 'straight';
+    let steerHoldUntilMs = 0;
+    let wasInNeutralZone = true;
+
     // Hàm tính toán Hình học toàn bộ bản đồ
     function calculateEnvironment() {
         const Ld_m = CAR_A + 1.0;
@@ -352,14 +366,37 @@
     function getCarCorners(cx = car.x, cy = car.y, cangle = car.angle) {
         const cos = Math.cos(cangle);
         const sin = Math.sin(cangle);
-        const hw = ENV.carW / 2;
-        const hh = ENV.carH / 2;
+        // Hitbox bất đối xứng đầu/đuôi để khớp ảnh xe thật hơn
+        const front = (ENV.carW / 2) * COLLISION_FRONT_SCALE;
+        const rear = (ENV.carW / 2) * COLLISION_REAR_SCALE;
+        const halfSide = (ENV.carH / 2) * COLLISION_SIDE_SCALE;
         return [
-            { x: cx + hw*cos - hh*sin, y: cy + hw*sin + hh*cos }, // Trái Dưới (Mũi)
-            { x: cx + hw*cos + hh*sin, y: cy + hw*sin - hh*cos }, // Phải Dưới (Mũi)
-            { x: cx - hw*cos + hh*sin, y: cy - hw*sin - hh*cos }, // Phải Trên (Đuôi)
-            { x: cx - hw*cos - hh*sin, y: cy - hw*sin + hh*cos }  // Trái Trên (Đuôi)
+            { x: cx + front*cos - halfSide*sin, y: cy + front*sin + halfSide*cos }, // Trái Dưới (Mũi)
+            { x: cx + front*cos + halfSide*sin, y: cy + front*sin - halfSide*cos }, // Phải Dưới (Mũi)
+            { x: cx - rear*cos + halfSide*sin, y: cy - rear*sin - halfSide*cos },   // Phải Trên (Đuôi)
+            { x: cx - rear*cos - halfSide*sin, y: cy - rear*sin + halfSide*cos }    // Trái Trên (Đuôi)
         ];
+    }
+
+    function updateSteeringUIState(timeMs) {
+        const isNeutral = Math.abs(car.steeringTurns) <= STEER_NEUTRAL_THRESHOLD;
+
+        if (isNeutral && !wasInNeutralZone) {
+            // Khi vừa về thẳng lái, giữ trạng thái này thêm 1 khoảng thời gian
+            steerHoldUntilMs = timeMs + (STRAIGHT_STEER_HOLD_SEC * 1000);
+            steerUIState = 'straight';
+        } else if (isNeutral) {
+            steerUIState = 'straight';
+        } else {
+            // Chưa hết thời gian hold thì vẫn hiển thị "Thẳng lái"
+            if (timeMs >= steerHoldUntilMs) {
+                steerUIState = car.steeringTurns < 0 ? 'left' : 'right';
+            } else {
+                steerUIState = 'straight';
+            }
+        }
+
+        wasInNeutralZone = isNeutral;
     }
 
     let lastTime = 0;
@@ -374,11 +411,12 @@
         car.steeringTurns = Math.max(-GAME_CONFIG.maxSteerTurns, Math.min(GAME_CONFIG.maxSteerTurns, car.steeringTurns));
 
         wheelImg.style.transform = `rotate(${car.steeringTurns * 360}deg)`;
+        updateSteeringUIState(time);
         let turnsAbs = Math.abs(car.steeringTurns).toFixed(1);
-        if (car.steeringTurns < -0.05) {
+        if (steerUIState === 'left') {
             steeringText.innerText = `Lái trái: ${turnsAbs}`;
             steeringText.className = 'w-24 text-base font-bold text-red-400 text-center'; 
-        } else if (car.steeringTurns > 0.05) {
+        } else if (steerUIState === 'right') {
             steeringText.innerText = `Lái phải: ${turnsAbs}`;
             steeringText.className = 'w-24 text-base font-bold text-blue-400 text-center'; 
         } else {
@@ -530,7 +568,8 @@
 
         // Ghi chú Ld (vạch vàng)
         ctx.save();
-        ctx.translate(ENV.chipRight + 15, ENV.chipTop + ENV.Ld/2);
+        // Đẩy chữ ra ngoài border phải để không đè lên vạch đỏ-trắng
+        ctx.translate(ENV.spotBorderRight + 15, ENV.chipTop + ENV.Ld/2);
         ctx.rotate(Math.PI/2);
         ctx.fillStyle = '#fde047';
         ctx.fillText(`Ld = ${ENV.Ld_m.toFixed(2)}m`, 0, 0);
@@ -552,7 +591,24 @@
             ctx.fillStyle = 'yellow'; // Đầu xe
             ctx.fillRect(ENV.carW/2 - 10, -ENV.carH/2, 10, ENV.carH);
         }
+
         ctx.restore();
+
+        if (SHOW_HITBOX_DEBUG) {
+            const corners = getCarCorners(car.x, car.y, car.angle);
+            ctx.strokeStyle = '#22d3ee';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(corners[0].x, corners[0].y);
+            ctx.lineTo(corners[1].x, corners[1].y);
+            ctx.lineTo(corners[2].x, corners[2].y);
+            ctx.lineTo(corners[3].x, corners[3].y);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.fillStyle = '#22d3ee';
+            ctx.font = '12px sans-serif';
+            ctx.fillText('HITBOX', corners[0].x + 8, corners[0].y - 8);
+        }
 
         // Khôi phục transform gốc của canvas, tránh bị cộng dồn qua các frame
         ctx.restore();
