@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ghép xe - Mobile</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            user-select: none;
+            touch-action: manipulation;
+        }
+        body {
+            margin: 0;
+            background: #0f172a;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+        /* Canvas bao phủ toàn màn hình */
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 1;
+        }
+        /* Lớp phủ nút điều khiển */
+        .controls-overlay {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 0 16px 20px 16px;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .control-group {
+            pointer-events: auto;
+            display: flex;
+            gap: 16px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            border-radius: 60px;
+            padding: 8px 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .ctrl-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #1e293b;
+            border: 2px solid #475569;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            transition: all 0.05s linear;
+            touch-action: none;
+            cursor: pointer;
+        }
+        .ctrl-btn:active {
+            transform: scale(0.92);
+            background: #3b82f6;
+        }
+        .ctrl-btn.special {
+            background: #dc2626;
+            border-color: #f87171;
+        }
+        .ctrl-btn.special:active {
+            background: #b91c1c;
+        }
+        /* Thanh công cụ trên cùng - bên trái */
+        .top-bar {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: auto;
+            display: flex;
+            gap: 12px;
+            z-index: 30;
+            pointer-events: none;
+        }
+        .top-btn {
+            pointer-events: auto;
+            background: #1e293bcc;
+            backdrop-filter: blur(8px);
+            border: 1px solid #475569;
+            border-radius: 40px;
+            padding: 8px 16px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .mode-buttons {
+            display: flex;
+            gap: 8px;
+            background: #1e293bcc;
+            backdrop-filter: blur(8px);
+            border-radius: 40px;
+            padding: 4px 12px;
+        }
+        .mode-btn {
+            padding: 6px 14px;
+            border-radius: 32px;
+            font-weight: bold;
+            font-size: 13px;
+            background: #334155;
+            color: #cbd5e1;
+            border: none;
+            cursor: pointer;
+        }
+        .mode-btn.active {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 0 8px #3b82f6;
+        }
+        /* Modal config */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+            opacity: 0;
+            transition: 0.2s;
+        }
+        .modal.active {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-content {
+            background: #1e293b;
+            width: 85%;
+            max-width: 340px;
+            border-radius: 32px;
+            padding: 24px 20px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+            border: 1px solid #475569;
+            position: relative;
+        }
+        .close-modal {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 28px;
+            color: #94a3b8;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+        .config-row {
+            margin-bottom: 20px;
+        }
+        .config-row label {
+            display: block;
+            color: #e2e8f0;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .config-row input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 20px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+        }
+        .warning-msg-mobile {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ef4444;
+            color: white;
+            padding: 6px 18px;
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            z-index: 25;
+            display: none;
+            pointer-events: none;
+            box-shadow: 0 2px 10px black;
+        }
+        @media (max-width: 600px) {
+            .ctrl-btn { width: 56px; height: 56px; font-size: 20px; }
+            .control-group { gap: 12px; padding: 6px 12px; }
+            .mode-btn { padding: 4px 12px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<!-- Overlay thông báo -->
+<div id="warningMsg" class="warning-msg-mobile">⚠️ XE ĐÈ VẠCH ⚠️</div>
+
+<!-- Thanh công cụ trên cùng - bên trái -->
+<div class="top-bar">
+    <button id="configBtn" class="top-btn">⚙️ Cấu hình</button>
+    <div class="mode-buttons">
+        <button id="modeDocBtn" class="mode-btn active">Ghép dọc</button>
+        <button id="modeNgangBtn" class="mode-btn">Ghép ngang</button>
+    </div>
+</div>
+
+<!-- Nút điều khiển ảo -->
+<div class="controls-overlay">
+    <!-- 2 nút lái trái/phải (bên trái) -->
+    <div class="control-group">
+        <div id="steerLeftBtn" class="ctrl-btn">◀</div>
+        <div id="steerRightBtn" class="ctrl-btn">▶</div>
+    </div>
+    <!-- 3 nút Tiến / Lùi / Ga (bên phải) -->
+    <div class="control-group">
+        <div id="gearUpBtn" class="ctrl-btn">▲</div>
+        <div id="gearDownBtn" class="ctrl-btn">▼</div>
+        <div id="gasBtn" class="ctrl-btn special">⏺</div>
+    </div>
+</div>
+
+<!-- Modal cấu hình -->
+<div id="configModal" class="modal">
+    <div class="modal-content">
+        <button id="closeModalBtn" class="close-modal">✕</button>
+        <h3 class="text-white text-center text-lg mb-4">Cài đặt xe</h3>
+        <div class="config-row">
+            <label>Tốc độ di chuyển</label>
+            <input type="range" id="cfgMoveSpeed" min="0.3" max="3.2" step="0.05" value="0.5">
+            <span id="valMove" class="text-gray-300 text-sm">0.5</span>
+        </div>
+        <div class="config-row">
+            <label>Tốc độ quay lái</label>
+            <input type="range" id="cfgSteerSpeed" min="0.5" max="4" step="0.1" value="1.0">
+            <span id="valSteer" class="text-gray-300 text-sm">1.0</span>
+        </div>
+        <div class="config-row">
+            <label>Chiều dài xe (m)</label>
+            <input type="number" id="cfgCarA" min="3.2" max="6.0" step="0.1" value="4.0">
+        </div>
+        <div class="config-row">
+            <label>Chiều rộng xe (m)</label>
+            <input type="number" id="cfgCarB" min="1.4" max="2.5" step="0.1" value="2.0">
+        </div>
+        <button id="applyConfigBtn" class="bg-blue-600 w-full py-2 rounded-full text-white mt-2">Áp dụng</button>
+    </div>
+</div>
+
+<img id="carImg" src="images/car.png" style="display:none;" onerror="this.src='data:image/svg+xml,%3Csvg...%3E'">
+
+<script>
+    (function(){
+        // ---------- CẤU HÌNH CHUNG ----------
+        const SCALE = 45;
+        let activeMode = 'doc';   // 'doc' hoặc 'ngang'
+        let currentCleanup = null;
+        let currentGame = null;    // lưu các hàm điều khiển nếu cần
+
+        // DOM elements
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const warningDiv = document.getElementById('warningMsg');
+        const carImage = document.getElementById('carImg');
+
+        // Cấu hình động
+        let CAR_A = 4.0, CAR_B = 2.0;
+        let MOVE_SPEED = 0.5, STEER_SPEED = 1.0;
+
+        // Biến trạng thái game (dùng chung cho cả 2 chế độ)
+        let car = { x:0, y:0, angle:0, steeringTurns:0, gear:1, isMoving:false };
+        let keys = { left: false, right: false }; // cho nút ảo lái
+        let ENV = {}, yellowLines = [], borderLines = [];
+        let mapOffsetX = 0, mapOffsetY = 0;
+        let hasParkingSuccess = false, hasExerciseCompleted = false;
+        let lastTime = 0, animationId = null;
+
+        // Các hằng số va chạm
+        const COLLISION_FRONT_SCALE = 0.80, COLLISION_REAR_SCALE = 0.72, COLLISION_SIDE_SCALE = 0.72;
+        const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 };
+        const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 };
+        const MAX_STEER_TURNS = 2.5;
+        const MAX_STEER_ANGLE_RAD = 40 * Math.PI / 180;
+
+        let steerUIState = 'straight', steerHoldUntilMs = 0, wasInNeutralZone = true;
+
+        // Image crop
+        let carImageCrop = { sx:0, sy:0, sw:0, sh:0, ready:false };
+
+        // ---------- HÀM TÍNH TOÁN MÔI TRƯỜNG THEO MODE ----------
+        function calculateEnvironmentDoc() {
+            const Ld_m = CAR_A + 0.6;
+            const Rd_m = CAR_B + 0.6;
+            const Ed_m = 1.2 * CAR_A;
+            ENV.carW = CAR_A * SCALE; ENV.carH = CAR_B * SCALE;
+            ENV.Ld = Ld_m * SCALE; ENV.Rd = Rd_m * SCALE; ENV.Ed = Ed_m * SCALE;
+            ENV.Ld_m = Ld_m; ENV.Rd_m = Rd_m; ENV.Ed_m = Ed_m;
+            const MARGIN = 18;
+            ENV.mapLeft = 40; ENV.roadTop = 260;
+            ENV.roadBottom = ENV.roadTop + ENV.Ed;
+            ENV.spotBorderLeft = ENV.mapLeft + ENV.Ed + 20;
+            ENV.chipTop = ENV.roadBottom + MARGIN;
+            ENV.chipBottom = ENV.chipTop + ENV.Ld;
+            ENV.chipLeft = ENV.spotBorderLeft + MARGIN;
+            ENV.chipRight = ENV.chipLeft + ENV.Rd;
+            ENV.spotBorderRight = ENV.chipRight + MARGIN;
+            ENV.spotBorderBottom = ENV.chipBottom + MARGIN;
+            ENV.rightRoadLeft = ENV.spotBorderRight + ENV.Ed;
+            ENV.rightRoadRight = ENV.rightRoadLeft + ENV.Ed;
+            ENV.rightRoadTop = 40;
+            ENV.rightRoadBottom = ENV.roadBottom + 120;
+
+            yellowLines = [
+                { x1: ENV.chipLeft, y1: ENV.chipTop, x2: ENV.chipLeft, y2: ENV.chipBottom },
+                { x1: ENV.chipRight, y1: ENV.chipTop, x2: ENV.chipRight, y2: ENV.chipBottom },
+                { x1: ENV.chipLeft, y1: ENV.chipBottom, x2: ENV.chipRight, y2: ENV.chipBottom }
+            ];
+            borderLines = [
+                {x1: ENV.mapLeft, y1: ENV.roadTop, x2: ENV.rightRoadLeft, y2: ENV.roadTop},
+                {x1: ENV.rightRoadLeft, y1: ENV.roadTop, x2: ENV.rightRoadLeft, y2: ENV.rightRoadTop},
+                {x1: ENV.rightRoadLeft, y1: ENV.rightRoadTop, x2: ENV.rightRoadRight, y2: ENV.rightRoadTop},
+                {x1: ENV.rightRoadRight, y1: ENV.rightRoadTop, x2: ENV.rightRoadRight, y2: ENV.rightRoadBottom},
+                {x1: ENV.rightRoadRight, y1: ENV.rightRoadBottom, x2: ENV.rightRoadLeft, y2: ENV.rightRoadBottom},
+                {x1: ENV.rightRoadLeft, y1: ENV.rightRoadBottom, x2: ENV.rightRoadLeft, y2: ENV.roadBottom},
+                {x1: ENV.rightRoadLeft, y1: ENV.roadBottom, x2: ENV.spotBorderRight, y2: ENV.roadBottom},
+                {x1: ENV.spotBorderRight, y1: ENV.roadBottom, x2: ENV.spotBorderRight, y2: ENV.spotBorderBottom},
+                {x1: ENV.spotBorderRight, y1: ENV.spotBorderBottom, x2: ENV.spotBorderLeft, y2: ENV.spotBorderBottom},
+                {x1: ENV.spotBorderLeft, y1: ENV.spotBorderBottom, x2: ENV.spotBorderLeft, y2: ENV.roadBottom},
+                {x1: ENV.spotBorderLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadBottom},
+                {x1: ENV.mapLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadTop}
+            ];
+        }
+
+        function calculateEnvironmentNgang() {
+            const Lg_m = (5 * CAR_A) / 3;
+            const Rg_m = (5 * CAR_B) / 4;
+            ENV.carW = CAR_A * SCALE; ENV.carH = CAR_B * SCALE;
+            ENV.Lg = Lg_m * SCALE; ENV.Rg = Rg_m * SCALE;
+            ENV.Lg_m = Lg_m; ENV.Rg_m = Rg_m;
+            const MARGIN = 18;
+            ENV.roadLeft = 100;
+            ENV.roadRight = ENV.roadLeft + 180;
+            ENV.mapTop = 50;
+            ENV.mapBottom = ENV.mapTop + ENV.Lg + 500;
+            ENV.chipTop = ENV.mapTop + 200;
+            ENV.chipBottom = ENV.chipTop + ENV.Lg;
+            ENV.chipLeft = ENV.roadRight;
+            ENV.chipRight = ENV.chipLeft + ENV.Rg;
+            ENV.borderTop = ENV.chipTop - MARGIN;
+            ENV.borderBottom = ENV.chipBottom + MARGIN;
+            ENV.borderRight = ENV.chipRight + MARGIN;
+
+            yellowLines = [
+                { x1: ENV.chipLeft, y1: ENV.chipTop, x2: ENV.chipRight, y2: ENV.chipTop },
+                { x1: ENV.chipRight, y1: ENV.chipTop, x2: ENV.chipRight, y2: ENV.chipBottom },
+                { x1: ENV.chipLeft, y1: ENV.chipBottom, x2: ENV.chipRight, y2: ENV.chipBottom }
+            ];
+            borderLines = [
+                {x1: ENV.roadLeft, y1: ENV.mapTop, x2: ENV.roadRight, y2: ENV.mapTop},
+                {x1: ENV.roadRight, y1: ENV.mapTop, x2: ENV.roadRight, y2: ENV.borderTop},
+                {x1: ENV.roadRight, y1: ENV.borderTop, x2: ENV.borderRight, y2: ENV.borderTop},
+                {x1: ENV.borderRight, y1: ENV.borderTop, x2: ENV.borderRight, y2: ENV.borderBottom},
+                {x1: ENV.borderRight, y1: ENV.borderBottom, x2: ENV.roadRight, y2: ENV.borderBottom},
+                {x1: ENV.roadRight, y1: ENV.borderBottom, x2: ENV.roadRight, y2: ENV.mapBottom},
+                {x1: ENV.roadRight, y1: ENV.mapBottom, x2: ENV.roadLeft, y2: ENV.mapBottom},
+                {x1: ENV.roadLeft, y1: ENV.mapBottom, x2: ENV.roadLeft, y2: ENV.mapTop}
+            ];
+        }
+
+        function resetCarPosition() {
+            if (activeMode === 'doc') {
+                car.x = ENV.rightRoadLeft + (ENV.Ed / 2);
+                car.y = ENV.rightRoadTop + (ENV.carW / 2) + 20;
+                car.angle = Math.PI / 2;
+            } else {
+                car.x = ENV.roadRight - ENV.carH/2 - 20;
+                car.y = ENV.chipBottom + ENV.carW/2 + 100;
+                car.angle = -Math.PI / 2;
+            }
+            car.steeringTurns = 0;
+            car.isMoving = false;
+            car.gear = 1;
+            hasParkingSuccess = false;
+            hasExerciseCompleted = false;
+            warningDiv.style.display = 'none';
+            keys.left = false; keys.right = false;
+        }
+
+        // ---------- HÀM TIỆN ÍCH ----------
+        function linesIntersect(a,b,c,d,p,q,r,s) {
+            const det = (c - a) * (s - q) - (r - p) * (d - b);
+            if (det === 0) return false;
+            const lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+            const gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+            return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+        }
+
+        function getCarCorners(cx=car.x, cy=car.y, cangle=car.angle) {
+            const cos = Math.cos(cangle), sin = Math.sin(cangle);
+            const front = (ENV.carW/2) * COLLISION_FRONT_SCALE;
+            const rear = (ENV.carW/2) * COLLISION_REAR_SCALE;
+            const halfSide = (ENV.carH/2) * COLLISION_SIDE_SCALE;
+            return [
+                { x: cx + front*cos - halfSide*sin, y: cy + front*sin + halfSide*cos },
+                { x: cx + front*cos + halfSide*sin, y: cy + front*sin - halfSide*cos },
+                { x: cx - rear*cos + halfSide*sin, y: cy - rear*sin - halfSide*cos },
+                { x: cx - rear*cos - halfSide*sin, y: cy - rear*sin + halfSide*cos }
+            ];
+        }
+
+        function carLocalToWorld(localX, localY, cx=car.x, cy=car.y, ca=car.angle) {
+            const cos = Math.cos(ca), sin = Math.sin(ca);
+            return { x: cx + localX*cos - localY*sin, y: cy + localX*sin + localY*cos };
+        }
+
+        function pointToSegmentDistance(px,py,x1,y1,x2,y2) {
+            const vx = x2-x1, vy = y2-y1;
+            const wx = px-x1, wy = py-y1;
+            const c1 = vx*wx + vy*wy;
+            if (c1 <= 0) return Math.hypot(px-x1, py-y1);
+            const c2 = vx*vx + vy*vy;
+            if (c2 <= c1) return Math.hypot(px-x2, py-y2);
+            const t = c1/c2;
+            const pxp = x1 + t*vx, pyp = y1 + t*vy;
+            return Math.hypot(px-pxp, py-pyp);
+        }
+
+        function isCarInsideRightVerticalRoad() {
+            if (activeMode !== 'doc') return false;
+            const marginX = ENV.carH * 0.35, marginY = ENV.carW * 0.35;
+            return (car.x >= ENV.rightRoadLeft+marginX && car.x <= ENV.rightRoadRight-marginX &&
+                car.y >= ENV.rightRoadTop+marginY && car.y <= ENV.rightRoadBottom-marginY);
+        }
+
+        function isCarOnMainRoad() {
+            if (activeMode !== 'ngang') return false;
+            return car.x >= ENV.roadLeft && car.x <= ENV.roadRight;
+        }
+
+        function updateParkingMilestones(hitBorder, hitYellow) {
+            if (hitBorder || hitYellow) return;
+            if (activeMode === 'doc') {
+                const inSpot = (car.x >= ENV.spotBorderLeft && car.x <= ENV.spotBorderRight && car.y >= ENV.roadBottom && car.y <= ENV.spotBorderBottom);
+                if (!hasParkingSuccess && inSpot) {
+                    const corners = getCarCorners();
+                    const d1 = pointToSegmentDistance(corners[3].x, corners[3].y, yellowLines[2].x1, yellowLines[2].y1, yellowLines[2].x2, yellowLines[2].y2);
+                    const d2 = pointToSegmentDistance(corners[2].x, corners[2].y, yellowLines[2].x1, yellowLines[2].y1, yellowLines[2].x2, yellowLines[2].y2);
+                    const minDistM = Math.min(d1,d2)/SCALE;
+                    if (minDistM >= 0.1 && minDistM <= 0.3) hasParkingSuccess = true;
+                }
+                if (hasParkingSuccess && !hasExerciseCompleted && isCarInsideRightVerticalRoad()) hasExerciseCompleted = true;
+            } else {
+                const corners = getCarCorners();
+                const insideSpot = corners.every(c => c.x >= ENV.chipLeft-5 && c.x <= ENV.chipRight+5 && c.y >= ENV.chipTop-5 && c.y <= ENV.chipBottom+5);
+                const isStraight = Math.abs(Math.cos(car.angle)) < 0.15;
+                if (!hasParkingSuccess && insideSpot && isStraight) hasParkingSuccess = true;
+                if (hasParkingSuccess && !hasExerciseCompleted && isCarOnMainRoad() && car.y < ENV.chipTop-20) hasExerciseCompleted = true;
+            }
+        }
+
+        function updateSteeringUI(nowMs) {
+            const isNeutral = Math.abs(car.steeringTurns) <= 0.05;
+            if (isNeutral && !wasInNeutralZone) { steerHoldUntilMs = nowMs + 100; steerUIState = 'straight'; }
+            else if (isNeutral) steerUIState = 'straight';
+            else steerUIState = (nowMs >= steerHoldUntilMs) ? (car.steeringTurns<0 ? 'left':'right') : 'straight';
+            wasInNeutralZone = isNeutral;
+            // Cập nhật UI nếu cần (có thể bỏ qua vì mobile không cần text)
+        }
+
+        function prepareCarImage() {
+            if (!carImage.complete || carImage.naturalWidth<=0 || carImageCrop.ready) return;
+            const w = carImage.naturalWidth, h = carImage.naturalHeight;
+            const offCanvas = new OffscreenCanvas(w,h);
+            const offCtx = offCanvas.getContext('2d');
+            offCtx.drawImage(carImage,0,0);
+            const imgData = offCtx.getImageData(0,0,w,h).data;
+            let minX=w, minY=h, maxX=0, maxY=0;
+            for(let y=0; y<h; y++) for(let x=0; x<w; x++) if(imgData[(y*w+x)*4+3] > 12) {
+                minX=Math.min(minX,x); minY=Math.min(minY,y); maxX=Math.max(maxX,x); maxY=Math.max(maxY,y);
+            }
+            if(maxX>=minX && maxY>=minY) { carImageCrop.sx=minX; carImageCrop.sy=minY; carImageCrop.sw=maxX-minX+1; carImageCrop.sh=maxY-minY+1; }
+            else { carImageCrop.sx=0; carImageCrop.sy=0; carImageCrop.sw=w; carImageCrop.sh=h; }
+            carImageCrop.ready=true;
+        }
+
+        function drawClippedGuideLine(ctx, px, py, dx, dy, minX, minY, maxX, maxY) {
+            const EPS = 1e-6;
+            const hits = [];
+            if (Math.abs(dx) > EPS) {
+                const tLeft = (minX - px) / dx, yLeft = py + tLeft*dy;
+                if (yLeft >= minY-EPS && yLeft <= maxY+EPS) hits.push({x:minX, y:yLeft, t:tLeft});
+                const tRight = (maxX - px) / dx, yRight = py + tRight*dy;
+                if (yRight >= minY-EPS && yRight <= maxY+EPS) hits.push({x:maxX, y:yRight, t:tRight});
+            }
+            if (Math.abs(dy) > EPS) {
+                const tTop = (minY - py) / dy, xTop = px + tTop*dx;
+                if (xTop >= minX-EPS && xTop <= maxX+EPS) hits.push({x:xTop, y:minY, t:tTop});
+                const tBottom = (maxY - py) / dy, xBottom = px + tBottom*dx;
+                if (xBottom >= minX-EPS && xBottom <= maxX+EPS) hits.push({x:xBottom, y:maxY, t:tBottom});
+            }
+            if (hits.length < 2) return;
+            hits.sort((a,b)=>a.t-b.t);
+            ctx.beginPath(); ctx.moveTo(hits[0].x, hits[0].y); ctx.lineTo(hits[hits.length-1].x, hits[hits.length-1].y); ctx.stroke();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#16a34a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.save(); ctx.translate(mapOffsetX, mapOffsetY);
+            // Vẽ đường dựa theo mode
+            ctx.beginPath();
+            if (activeMode === 'doc') {
+                ctx.moveTo(ENV.mapLeft, ENV.roadTop); ctx.lineTo(ENV.rightRoadLeft, ENV.roadTop);
+                ctx.lineTo(ENV.rightRoadLeft, ENV.rightRoadTop); ctx.lineTo(ENV.rightRoadRight, ENV.rightRoadTop);
+                ctx.lineTo(ENV.rightRoadRight, ENV.rightRoadBottom); ctx.lineTo(ENV.rightRoadLeft, ENV.rightRoadBottom);
+                ctx.lineTo(ENV.rightRoadLeft, ENV.roadBottom); ctx.lineTo(ENV.spotBorderRight, ENV.roadBottom);
+                ctx.lineTo(ENV.spotBorderRight, ENV.spotBorderBottom); ctx.lineTo(ENV.spotBorderLeft, ENV.spotBorderBottom);
+                ctx.lineTo(ENV.spotBorderLeft, ENV.roadBottom); ctx.lineTo(ENV.mapLeft, ENV.roadBottom);
+            } else {
+                ctx.moveTo(ENV.roadLeft, ENV.mapTop); ctx.lineTo(ENV.roadRight, ENV.mapTop);
+                ctx.lineTo(ENV.roadRight, ENV.borderTop); ctx.lineTo(ENV.borderRight, ENV.borderTop);
+                ctx.lineTo(ENV.borderRight, ENV.borderBottom); ctx.lineTo(ENV.roadRight, ENV.borderBottom);
+                ctx.lineTo(ENV.roadRight, ENV.mapBottom); ctx.lineTo(ENV.roadLeft, ENV.mapBottom);
+            }
+            ctx.closePath();
+            ctx.fillStyle = '#64748b'; ctx.fill();
+            ctx.lineWidth = 5; ctx.strokeStyle = 'white'; ctx.setLineDash([]); ctx.stroke();
+            ctx.strokeStyle = '#ef4444'; ctx.setLineDash([15,15]); ctx.stroke(); ctx.setLineDash([]);
+            ctx.beginPath();
+            yellowLines.forEach(l => { ctx.moveTo(l.x1,l.y1); ctx.lineTo(l.x2,l.y2); });
+            ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.stroke();
+            // Chú thích nhanh
+            ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 12px monospace';
+            if (activeMode === 'doc') {
+                ctx.fillText(`Ed=${ENV.Ed_m.toFixed(1)}m`, ENV.mapLeft+50, ENV.roadBottom+20);
+                ctx.fillStyle = '#fde047';
+                ctx.fillText(`Ld=${ENV.Ld_m.toFixed(1)}m`, ENV.spotBorderRight+15, ENV.chipTop+ENV.Ld/2);
+                ctx.fillText(`Rd=${ENV.Rd_m.toFixed(1)}m`, ENV.chipLeft+ENV.Rd/2, ENV.chipBottom-8);
+            } else {
+                ctx.fillStyle = '#fde047';
+                ctx.fillText(`Lg=${ENV.Lg_m.toFixed(1)}m`, ENV.borderRight+12, ENV.chipTop+ENV.Lg/2);
+                ctx.fillText(`Rg=${ENV.Rg_m.toFixed(1)}m`, ENV.chipLeft+ENV.Rg/2, ENV.borderBottom+20);
+            }
+            // Vẽ xe
+            ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.angle);
+            if(carImage.complete && carImage.naturalWidth){ prepareCarImage(); if(carImageCrop.ready) ctx.drawImage(carImage, carImageCrop.sx, carImageCrop.sy, carImageCrop.sw, carImageCrop.sh, -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH); }
+            else { ctx.fillStyle='red'; ctx.fillRect(-ENV.carW/2,-ENV.carH/2, ENV.carW, ENV.carH); }
+            ctx.restore();
+            // Vẽ đường căn
+            const mapMinX = (activeMode==='doc')?ENV.mapLeft:ENV.roadLeft;
+            const mapMaxX = (activeMode==='doc')?Math.max(ENV.rightRoadRight, ENV.spotBorderRight):ENV.borderRight;
+            const mapMinY = (activeMode==='doc')?Math.min(ENV.roadTop, ENV.rightRoadTop):ENV.mapTop;
+            const mapMaxY = (activeMode==='doc')?Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom):ENV.mapBottom;
+            const sp = carLocalToWorld(ENV.carW*STEERING_LOCAL_RATIO.x, ENV.carH*STEERING_LOCAL_RATIO.y);
+            const dp = carLocalToWorld(ENV.carW*DRIVER_SEAT_LOCAL_RATIO.x, ENV.carH*DRIVER_SEAT_LOCAL_RATIO.y);
+            const dirLong = { x:Math.cos(car.angle), y:Math.sin(car.angle) };
+            const dirSide = { x:-Math.sin(car.angle), y:Math.cos(car.angle) };
+            ctx.save(); ctx.strokeStyle='rgba(253,230,138,0.85)'; ctx.lineWidth=1.5; ctx.setLineDash([8,8]);
+            drawClippedGuideLine(ctx, sp.x, sp.y, dirLong.x, dirLong.y, mapMinX, mapMinY, mapMaxX, mapMaxY);
+            drawClippedGuideLine(ctx, dp.x, dp.y, dirSide.x, dirSide.y, mapMinX, mapMinY, mapMaxX, mapMaxY);
+            ctx.setLineDash([]); ctx.restore();
+            ctx.restore();
+        }
+
+        function updatePhysics(dt) {
+            // Điều khiển lái từ nút ảo
+            let steerDelta = STEER_SPEED * dt;
+            if (keys.left) car.steeringTurns -= steerDelta;
+            if (keys.right) car.steeringTurns += steerDelta;
+            car.steeringTurns = Math.min(MAX_STEER_TURNS, Math.max(-MAX_STEER_TURNS, car.steeringTurns));
+            updateSteeringUI(performance.now());
+
+            let hitBorder=false, hitYellow=false;
+            if (car.isMoving && car.gear !== 0) {
+                const wheelAngle = (car.steeringTurns / MAX_STEER_TURNS) * MAX_STEER_ANGLE_RAD;
+                const vel = MOVE_SPEED * 60 * dt * car.gear;
+                const nextX = car.x + Math.cos(car.angle)*vel;
+                const nextY = car.y + Math.sin(car.angle)*vel;
+                const nextAngle = car.angle + (vel/(ENV.carW*0.6))*Math.tan(wheelAngle);
+                const nextCorners = getCarCorners(nextX,nextY,nextAngle);
+                const edges = [[nextCorners[0],nextCorners[1]],[nextCorners[1],nextCorners[2]],[nextCorners[2],nextCorners[3]],[nextCorners[3],nextCorners[0]]];
+                for(let e of edges) for(let l of borderLines) if(linesIntersect(e[0].x,e[0].y,e[1].x,e[1].y,l.x1,l.y1,l.x2,l.y2)) { hitBorder=true; break; }
+                if(!hitBorder) { car.x=nextX; car.y=nextY; car.angle=nextAngle; }
+            }
+            const currCorners = getCarCorners();
+            const currEdges = [[currCorners[0],currCorners[1]],[currCorners[1],currCorners[2]],[currCorners[2],currCorners[3]],[currCorners[3],currCorners[0]]];
+            for(let e of currEdges) for(let l of yellowLines) if(linesIntersect(e[0].x,e[0].y,e[1].x,e[1].y,l.x1,l.y1,l.x2,l.y2)) { hitYellow=true; break; }
+            if(!hitBorder) for(let e of currEdges) for(let l of borderLines) if(linesIntersect(e[0].x,e[0].y,e[1].x,e[1].y,l.x1,l.y1,l.x2,l.y2)) { hitBorder=true; break; }
+            updateParkingMilestones(hitBorder, hitYellow);
+
+            if(hitBorder) { warningDiv.innerText='⚠️ XE CHẠM LỀ ⚠️'; warningDiv.style.backgroundColor='#991b1b'; warningDiv.style.display='block'; }
+            else if(hitYellow) { warningDiv.innerText='⚠️ XE ĐÈ VẠCH ⚠️'; warningDiv.style.backgroundColor='#ef4444'; warningDiv.style.display='block'; }
+            else if(hasExerciseCompleted) { warningDiv.innerText='🎉 HOÀN THÀNH 🎉'; warningDiv.style.backgroundColor='#065f46'; warningDiv.style.display='block'; }
+            else if(hasParkingSuccess) { warningDiv.innerText='✅ GHÉP THÀNH CÔNG ✅'; warningDiv.style.backgroundColor='#15803d'; warningDiv.style.display='block'; }
+            else warningDiv.style.display='none';
+        }
+
+        function resizeAndOffset() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (activeMode === 'doc') {
+                const minX = ENV.mapLeft, maxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
+                const minY = Math.min(ENV.roadTop, ENV.rightRoadTop), maxY = Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom);
+                const w = maxX-minX, h = maxY-minY;
+                mapOffsetX = (canvas.width - w)/2 - minX;
+                mapOffsetY = (canvas.height - h)/2 - minY;
+            } else {
+                const minX = ENV.roadLeft, maxX = ENV.borderRight, minY = ENV.mapTop, maxY = ENV.mapBottom;
+                mapOffsetX = (canvas.width - (maxX-minX))/2 - minX;
+                mapOffsetY = (canvas.height - (maxY-minY))/2 - minY;
+            }
+        }
+
+        function gameLoop(now) {
+            const dt = Math.min(0.033, (now - lastTime)/1000 || 0);
+            lastTime = now;
+            updatePhysics(dt);
+            draw();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function switchMode(mode) {
+            activeMode = mode;
+            if (mode === 'doc') {
+                calculateEnvironmentDoc();
+                document.getElementById('modeDocBtn').classList.add('active');
+                document.getElementById('modeNgangBtn').classList.remove('active');
+            } else {
+                calculateEnvironmentNgang();
+                document.getElementById('modeNgangBtn').classList.add('active');
+                document.getElementById('modeDocBtn').classList.remove('active');
+            }
+            resetCarPosition();
+            resizeAndOffset();
+        }
+
+        function applyConfig() {
+            CAR_A = parseFloat(document.getElementById('cfgCarA').value);
+            CAR_B = parseFloat(document.getElementById('cfgCarB').value);
+            MOVE_SPEED = parseFloat(document.getElementById('cfgMoveSpeed').value);
+            STEER_SPEED = parseFloat(document.getElementById('cfgSteerSpeed').value);
+            document.getElementById('valMove').innerText = MOVE_SPEED;
+            document.getElementById('valSteer').innerText = STEER_SPEED;
+            if (activeMode === 'doc') calculateEnvironmentDoc();
+            else calculateEnvironmentNgang();
+            resetCarPosition();
+            resizeAndOffset();
+        }
+
+        // Khởi tạo sự kiện touch cho nút ảo
+        function attachButton(el, onTouchStart, onTouchEnd) {
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); onTouchStart(true); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); onTouchEnd(false); });
+            el.addEventListener('mousedown', () => onTouchStart(true));
+            el.addEventListener('mouseup', () => onTouchEnd(false));
+        }
+
+        function init() {
+            // Nút lái
+            attachButton(document.getElementById('steerLeftBtn'), (v) => keys.left = v, (v) => keys.left = v);
+            attachButton(document.getElementById('steerRightBtn'), (v) => keys.right = v, (v) => keys.right = v);
+            // Nút số
+            attachButton(document.getElementById('gearUpBtn'), () => { car.gear = 1; }, () => {});
+            attachButton(document.getElementById('gearDownBtn'), () => { car.gear = -1; }, () => {});
+            // Nút ga (giữ để di chuyển)
+            let gasActive = false;
+            attachButton(document.getElementById('gasBtn'), () => { gasActive = true; car.isMoving = true; }, () => { gasActive = false; car.isMoving = false; });
+            // Reset bằng nút trong modal? có thể thêm nút reset riêng nhưng tạm thời dùng modal apply
+            document.getElementById('configBtn').addEventListener('click', () => document.getElementById('configModal').classList.add('active'));
+            document.getElementById('closeModalBtn').addEventListener('click', () => document.getElementById('configModal').classList.remove('active'));
+            document.getElementById('applyConfigBtn').addEventListener('click', () => { applyConfig(); document.getElementById('configModal').classList.remove('active'); });
+            document.getElementById('modeDocBtn').addEventListener('click', () => { switchMode('doc'); });
+            document.getElementById('modeNgangBtn').addEventListener('click', () => { switchMode('ngang'); });
+            // Khởi tạo mặc định
+            CAR_A = 4.0; CAR_B = 2.0; MOVE_SPEED = 0.5; STEER_SPEED = 1.0;
+            document.getElementById('cfgCarA').value = CAR_A;
+            document.getElementById('cfgCarB').value = CAR_B;
+            document.getElementById('cfgMoveSpeed').value = MOVE_SPEED;
+            document.getElementById('cfgSteerSpeed').value = STEER_SPEED;
+            document.getElementById('valMove').innerText = MOVE_SPEED;
+            document.getElementById('valSteer').innerText = STEER_SPEED;
+            switchMode('doc');
+            window.addEventListener('resize', () => resizeAndOffset());
+            resizeAndOffset();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>
