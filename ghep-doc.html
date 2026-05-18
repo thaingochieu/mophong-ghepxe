@@ -55,9 +55,9 @@
     <!-- Bảng điều khiển (Dọc, bên phải) -->
     <div class="dashboard">
         <!-- Cụm 1: Vô lăng, Cần số & Thông số -->
-        <div class="flex flex-col items-center gap-4 bg-gray-800 p-2 rounded-lg border border-gray-600 mx-4">
+        <div class="flex flex-col items-center gap-4 bg-stone-50 p-5 rounded-2xl border-4 bg-stone-50 shadow-lg mx-4">
             <div class="flex flex-col items-center gap-1.5">
-                <div class="wheel-container">
+                <div class="wheel-container" style="width:120px;height:120px;">
                     <img id="wheelImg" src="steering_wheel.png" class="wheel" alt="Vô lăng">
                 </div>
                 <!-- Cần số thu nhỏ -->
@@ -67,7 +67,7 @@
                     <button id="btnReset" class="gear bg-red-600 hover:bg-red-500 text-white border-red-500 cursor-pointer ml-1" title="Đặt lại vị trí xe">RESET</button>
                 </div>
             </div>
-            <div id="steeringText" class="w-24 text-base font-bold text-yellow-400 text-center">Thẳng lái</div>
+            <div id="steeringText" class="w-32 text-lg font-bold text-yellow-600 text-center">Thẳng lái</div>
         </div>
 
         <!-- Cụm 2: Cấu hình Kích thước & Tốc độ -->
@@ -75,8 +75,8 @@
             <!-- Cột Tốc độ -->
             <div class="flex flex-col gap-2">
                 <div class="flex flex-col">
-                    <label class="text-xs text-gray-300 flex justify-between">Tốc độ: <span id="valMove">1.5</span></label>
-                    <input type="range" id="cfgMoveSpeed" class="w-28" min="0.5" max="3" step="0.1" value="1.5">
+                    <label class="text-xs text-gray-300 flex justify-between">Tốc độ: <span id="valMove">0.5</span></label>
+                    <input type="range" id="cfgMoveSpeed" class="w-28" min="0.5" max="3" step="0.1" value="0.5">
                 </div>
                 <div class="flex flex-col">
                     <label class="text-xs text-gray-300 flex justify-between">Quay lái: <span id="valSteer">2.0</span></label>
@@ -171,7 +171,7 @@
         }
 
     const GAME_CONFIG = {
-        moveSpeed: 1.5, 
+        moveSpeed: 0.5, 
         steerSpeed: 2.0, 
         maxSteerTurns: 2.5,
         maxSteerAngleRad: 40 * (Math.PI / 180), 
