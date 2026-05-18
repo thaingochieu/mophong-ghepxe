@@ -1,861 +1,861 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mô Phỏng Ghép Xe Dọc</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #1a202c; color: white; font-family: sans-serif; }
-        
-        /* Bảng điều khiển dọc bên phải */
-        .dashboard {
-            background: #2d3748;
-            border-left: 2px solid #4a5568;
-            box-shadow: -4px 0 6px rgba(0,0,0,0.3);
-            z-index: 20;
-            height: 100vh;
-            width: 340px;
-            min-width: 280px;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-            padding-top: 32px;
-            padding-bottom: 32px;
-        }
-        
-        canvas { 
-            display: block; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
-            cursor: crosshair;
-        }
-
-        .wheel-container { position: relative; width: 80px; height: 80px; }
-        .wheel { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; transition: transform 0.1s linear; }
-        
-        .gear { padding: 4px 10px; font-size: 11px; border-radius: 4px; background: #4a5568; color: #a0aec0; border: 2px solid transparent; transition: all 0.2s; font-weight: bold;}
-        .gear.active-forward { background: #fee2e2; color: #ef4444; border-color: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);}
-        .gear.active-reverse { background: #e0f2fe; color: #3b82f6; border-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);}
-        
-        .warning-overlay { 
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            padding: 10px 30px; border-radius: 8px; font-size: 1.5rem; font-weight: bold;
-            display: none; z-index: 30; animation: blink 0.5s infinite alternate;
-        }
-
-        @keyframes blink { from { opacity: 1; } to { opacity: 0.5; } }
-        
-        input[type="range"] { cursor: pointer; }
-        .kbd { background: #1a202c; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.85em; border-bottom: 1px solid #000; color: #63b3ed;}
-    </style>
-</head>
-<body class="flex flex-row h-screen w-screen">
-
-    <!-- Bảng điều khiển (Dọc, bên phải) -->
-    <div class="dashboard">
-        <!-- Cụm 1: Vô lăng, Cần số & Thông số -->
-        <div class="flex flex-col items-center gap-4 bg-stone-50 p-5 rounded-2xl border-4 bg-stone-50 shadow-lg mx-4">
-            <div class="flex flex-col items-center gap-1.5">
-                <div class="wheel-container" style="width:120px;height:120px;">
-                    <img id="wheelImg" src="steering_wheel.png" class="wheel" alt="Vô lăng">
-                </div>
-                <!-- Cần số thu nhỏ -->
-                <div class="flex items-center gap-2">
-                    <div id="gearForward" class="gear active-forward">TIẾN</div>
-                    <div id="gearReverse" class="gear">LÙI</div>
-                    <button id="btnReset" class="gear bg-red-600 hover:bg-red-500 text-white border-red-500 cursor-pointer ml-1" title="Đặt lại vị trí xe">RESET</button>
-                </div>
-            </div>
-            <div id="steeringText" class="w-32 text-lg font-bold text-yellow-600 text-center">Thẳng lái</div>
-        </div>
-
-        <!-- Cụm 2: Cấu hình Kích thước & Tốc độ -->
-        <div class="flex flex-col gap-6 bg-gray-800 p-3 rounded-lg border border-gray-600 mx-4">
-            <!-- Cột Tốc độ -->
-            <div class="flex flex-col gap-2">
-                <div class="flex flex-col">
-                    <label class="text-xs text-gray-300 flex justify-between">Tốc độ: <span id="valMove">0.5</span></label>
-                    <input type="range" id="cfgMoveSpeed" class="w-28" min="0.5" max="3" step="0.1" value="0.5">
-                </div>
-                <div class="flex flex-col">
-                    <label class="text-xs text-gray-300 flex justify-between">Quay lái: <span id="valSteer">2.0</span></label>
-                    <input type="range" id="cfgSteerSpeed" class="w-28" min="0.5" max="4" step="0.1" value="2.0">
-                </div>
-            </div>
-            <!-- Cột Kích thước -->
-            <div class="flex flex-col gap-2 justify-center">
-                <div class="flex justify-between items-center gap-2">
-                    <label class="text-xs text-green-300">Dài xe (a):</label>
-                    <div class="flex items-center">
-                        <input type="number" id="cfgCarA" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="3.5" max="6.0" step="0.1" value="4">
-                        <span class="ml-1 text-xs text-gray-400">m</span>
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Mô Phỏng Ghép Xe Dọc</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            body { margin: 0; overflow: hidden; background-color: #1a202c; color: white; font-family: sans-serif; }
+            
+            /* Bảng điều khiển dọc bên phải */
+            .dashboard {
+                background: #2d3748;
+                border-left: 2px solid #4a5568;
+                box-shadow: -4px 0 6px rgba(0,0,0,0.3);
+                z-index: 20;
+                height: 100vh;
+                width: 340px;
+                min-width: 280px;
+                display: flex;
+                flex-direction: column;
+                gap: 24px;
+                padding-top: 32px;
+                padding-bottom: 32px;
+            }
+            
+            canvas { 
+                display: block; 
+                border-radius: 8px; 
+                box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+                cursor: crosshair;
+            }
+    
+            .wheel-container { position: relative; width: 80px; height: 80px; }
+            .wheel { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; transition: transform 0.1s linear; }
+            
+            .gear { padding: 4px 10px; font-size: 11px; border-radius: 4px; background: #4a5568; color: #a0aec0; border: 2px solid transparent; transition: all 0.2s; font-weight: bold;}
+            .gear.active-forward { background: #fee2e2; color: #ef4444; border-color: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);}
+            .gear.active-reverse { background: #e0f2fe; color: #3b82f6; border-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);}
+            
+            .warning-overlay { 
+                position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+                padding: 10px 30px; border-radius: 8px; font-size: 1.5rem; font-weight: bold;
+                display: none; z-index: 30; animation: blink 0.5s infinite alternate;
+            }
+    
+            @keyframes blink { from { opacity: 1; } to { opacity: 0.5; } }
+            
+            input[type="range"] { cursor: pointer; }
+            .kbd { background: #1a202c; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.85em; border-bottom: 1px solid #000; color: #63b3ed;}
+        </style>
+    </head>
+    <body class="flex flex-row h-screen w-screen">
+    
+        <!-- Bảng điều khiển (Dọc, bên phải) -->
+        <div class="dashboard">
+            <!-- Cụm 1: Vô lăng, Cần số & Thông số -->
+            <div class="flex flex-col items-center gap-4 bg-stone-50 p-5 rounded-2xl border-4 bg-stone-50 shadow-lg mx-4">
+                <div class="flex flex-col items-center gap-1.5">
+                    <div class="wheel-container" style="width:120px;height:120px;">
+                        <img id="wheelImg" src="steering_wheel.png" class="wheel" alt="Vô lăng">
+                    </div>
+                    <!-- Cần số thu nhỏ -->
+                    <div class="flex items-center gap-2">
+                        <div id="gearForward" class="gear active-forward">TIẾN</div>
+                        <div id="gearReverse" class="gear">LÙI</div>
+                        <button id="btnReset" class="gear bg-red-600 hover:bg-red-500 text-white border-red-500 cursor-pointer ml-1" title="Đặt lại vị trí xe">RESET</button>
                     </div>
                 </div>
-                <div class="flex justify-between items-center gap-2">
-                    <label class="text-xs text-green-300">Rộng xe (b):</label>
-                    <div class="flex items-center">
-                        <input type="number" id="cfgCarB" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="1.4" max="2.4" step="0.1" value="2">
-                        <span class="ml-1 text-xs text-gray-400">m</span>
+                <div id="steeringText" class="w-32 text-lg font-bold text-yellow-600 text-center">Thẳng lái</div>
+            </div>
+    
+            <!-- Cụm 2: Cấu hình Kích thước & Tốc độ -->
+            <div class="flex flex-col gap-6 bg-gray-800 p-3 rounded-lg border border-gray-600 mx-4">
+                <!-- Cột Tốc độ -->
+                <div class="flex flex-col gap-2">
+                    <div class="flex flex-col">
+                        <label class="text-xs text-gray-300 flex justify-between">Tốc độ: <span id="valMove">0.5</span></label>
+                        <input type="range" id="cfgMoveSpeed" class="w-28" min="0.5" max="3" step="0.1" value="0.5">
+                    </div>
+                    <div class="flex flex-col">
+                        <label class="text-xs text-gray-300 flex justify-between">Quay lái: <span id="valSteer">1.0</span></label>
+                        <input type="range" id="cfgSteerSpeed" class="w-28" min="0.5" max="4" step="0.1" value="1.0">
+                    </div>
+                </div>
+                <!-- Cột Kích thước -->
+                <div class="flex flex-col gap-2 justify-center">
+                    <div class="flex justify-between items-center gap-2">
+                        <label class="text-xs text-green-300">Dài xe (a):</label>
+                        <div class="flex items-center">
+                            <input type="number" id="cfgCarA" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="3.5" max="6.0" step="0.1" value="4">
+                            <span class="ml-1 text-xs text-gray-400">m</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center gap-2">
+                        <label class="text-xs text-green-300">Rộng xe (b):</label>
+                        <div class="flex items-center">
+                            <input type="number" id="cfgCarB" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600 focus:outline-none focus:border-green-400" min="1.4" max="2.4" step="0.1" value="2">
+                            <span class="ml-1 text-xs text-gray-400">m</span>
+                        </div>
                     </div>
                 </div>
             </div>
+    
+            <!-- Cụm 4: Hướng dẫn -->
+            <div class="bg-gray-800 p-3 rounded-lg border border-gray-600 text-[13px] text-gray-300 leading-relaxed mx-4">
+                <span class="kbd">A</span> / <span class="kbd">D</span> : Quay vô lăng trái/phải <br>
+                <span class="kbd">Cuộn ↑↓</span> : Sang số Tiến/Lùi <br>
+                <span class="kbd">Giữ Chuột Trái</span> : Đạp ga (Di chuyển)
+            </div>
         </div>
-
-        <!-- Cụm 4: Hướng dẫn -->
-        <div class="bg-gray-800 p-3 rounded-lg border border-gray-600 text-[13px] text-gray-300 leading-relaxed mx-4">
-            <span class="kbd">A</span> / <span class="kbd">D</span> : Quay vô lăng trái/phải <br>
-            <span class="kbd">Cuộn ↑↓</span> : Sang số Tiến/Lùi <br>
-            <span class="kbd">Giữ Chuột Trái</span> : Đạp ga (Di chuyển)
+    
+        <!-- Khu vực Canvas Game -->
+        <div class="flex-1 flex items-center justify-center relative bg-gray-900 overflow-hidden">
+            <div id="warningMsg" class="warning-overlay" style="background-color: #ef4444; color: white;">
+                ⚠️ XE ĐÈ VẠCH ⚠️
+            </div>
+            <canvas id="gameCanvas" style="width:100%;height:100%;display:block;"></canvas>
         </div>
-    </div>
-
-    <!-- Khu vực Canvas Game -->
-    <div class="flex-1 flex items-center justify-center relative bg-gray-900 overflow-hidden">
-        <div id="warningMsg" class="warning-overlay" style="background-color: #ef4444; color: white;">
-            ⚠️ XE ĐÈ VẠCH ⚠️
-        </div>
-        <canvas id="gameCanvas" style="width:100%;height:100%;display:block;"></canvas>
-    </div>
-
-    <!-- Load xe -->
-    <img id="carImg" src="car.png" style="display: none;">
-
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-
-    // UI Elements
-    const wheelImg = document.getElementById('wheelImg');
-    const steeringText = document.getElementById('steeringText');
-    const gearForward = document.getElementById('gearForward');
-    const gearReverse = document.getElementById('gearReverse');
-    const warningMsg = document.getElementById('warningMsg');
-    const carImage = document.getElementById('carImg');
-    const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
-
-    // TỶ LỆ CHUYỂN ĐỔI: 1 mét = 45 pixels
-    const SCALE = 45; 
-    // Khoảng dư của chuồng so với xe (m) để giữ tỉ lệ trực quan hợp lý
-    const PARKING_CLEARANCE_LENGTH_M = 0.6;
-    const PARKING_CLEARANCE_WIDTH_M = 0.6;
-
-    // Các biến Kích thước & Môi trường
-    let CAR_A = 4;
-    let CAR_B = 2;
-    let ENV = {};
-    let yellowLines = [];
-    let borderLines = []; // Thêm mảng chứa các đường bao quanh map để chặn xe
-
-        // Offset để căn giữa bản đồ trên canvas
-        let mapOffsetX = 0, mapOffsetY = 0;
-
-        // Hàm tính toán offset để căn giữa map vào canvas
-        function calculateMapOffset() {
-            // Xác định bounding box của map
-            // Lấy các giá trị min/max của các điểm đặc trưng
-            const minX = ENV.mapLeft;
-            const maxX = Math.max(
-                ENV.rightRoadRight,
-                ENV.spotBorderRight
-            );
-            const minY = Math.min(
-                ENV.roadTop,
-                ENV.rightRoadTop
-            );
-            const maxY = Math.max(
-                ENV.rightRoadBottom,
-                ENV.spotBorderBottom
-            );
-            const mapWidth = maxX - minX;
-            const mapHeight = maxY - minY;
-            // Căn giữa map trong canvas
-            mapOffsetX = (canvas.width - mapWidth) / 2 - minX;
-            mapOffsetY = (canvas.height - mapHeight) / 2 - minY;
-        }
-
-    const GAME_CONFIG = {
-        moveSpeed: 0.5, 
-        steerSpeed: 2.0, 
-        maxSteerTurns: 2.5,
-        maxSteerAngleRad: 40 * (Math.PI / 180), 
-    };
-
-    const car = {
-        x: 0, y: 0,
-        angle: Math.PI / 2, // Mặt định quay xuống dưới (90 độ)
-        steeringTurns: 0, 
-        gear: 1, 
-        isMoving: false
-    };
-
-    const keys = { A: false, D: false };
-
-    // Tinh chỉnh hitbox va chạm để sát thân xe hơn (tính theo tỷ lệ kích thước xe)
-    // Các hệ số này tự scale theo CAR_A/CAR_B khi bạn đổi kích thước xe.
-    const COLLISION_FRONT_SCALE = 0.80; // Nửa đầu xe (mũi)
-    const COLLISION_REAR_SCALE = 0.72;  // Nửa đuôi xe (ảnh thường có đổ bóng/viền)
-    const COLLISION_SIDE_SCALE = 0.72;  // Nửa bề rộng xe
-    const SHOW_HITBOX_DEBUG = false;    // Bật true để vẽ hitbox kiểm tra trực quan
-
-    // Đường căn mờ bám theo xe (tọa độ local theo tâm xe)
-    // +localX: về phía đầu xe, -localX: về phía đuôi xe
-    // +localY: lệch xuống dưới ảnh, -localY: lệch lên trên ảnh
-    const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 }; // Vị trí vô lăng theo tỷ lệ carW/carH
-    const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 }; // Vị trí ghế lái theo tỷ lệ carW/carH
-
-    // Giữ trạng thái "Thẳng lái" trước khi chuyển trái/phải (đơn vị: giây)
-    const STRAIGHT_STEER_HOLD_SEC = 0.5; // <-- Bạn có thể tự chỉnh tại đây
-    const STEER_NEUTRAL_THRESHOLD = 0.05;
-    let steerUIState = 'straight';
-    let steerHoldUntilMs = 0;
-    let wasInNeutralZone = true;
-    let hasParkingSuccess = false;
-    let hasExerciseCompleted = false;
-
-    // Hàm tính toán Hình học toàn bộ bản đồ
-    function calculateEnvironment() {
-        const Ld_m = CAR_A + PARKING_CLEARANCE_LENGTH_M;
-        const Rd_m = CAR_B + PARKING_CLEARANCE_WIDTH_M;
-        const Ed_m = 1.2 * CAR_A;
-
-        ENV.carW = CAR_A * SCALE; 
-        ENV.carH = CAR_B * SCALE; 
-        ENV.Ld = Ld_m * SCALE;    
-        ENV.Rd = Rd_m * SCALE;    
-        ENV.Ed = Ed_m * SCALE;    
-        ENV.Ld_m = Ld_m;
-        ENV.Rd_m = Rd_m;
-        ENV.Ed_m = Ed_m;
-
-        const MARGIN = 18; // Lề giữa vạch vàng (chip) và viền ngoài (border)
-
-        // Các mốc tọa độ chính để vẽ bản đồ
-        ENV.mapLeft = 40; 
-        ENV.roadTop = 260; // Đường ngang bắt đầu hơi thấp để nhường chỗ cho đường dọc bên phải
-        ENV.roadBottom = ENV.roadTop + ENV.Ed;
-
-        // Vị trí chuồng đỗ (Border ngoài) - Cạnh trái
-        ENV.spotBorderLeft = ENV.mapLeft + ENV.Ed + 20; // Cách đường cụt bên trái 1 đoạn
-
-        // Tọa độ Vạch Vàng (Chip) - Lùi xuống 1 khoảng MARGIN so với miệng chuồng
-        ENV.chipTop = ENV.roadBottom + MARGIN;
-        ENV.chipBottom = ENV.chipTop + ENV.Ld;
-        ENV.chipLeft = ENV.spotBorderLeft + MARGIN;
-        ENV.chipRight = ENV.chipLeft + ENV.Rd;
-
-        // Cập nhật lại Border phải và đáy dựa trên vạch chip để bao ngoài đều nhau
-        ENV.spotBorderRight = ENV.chipRight + MARGIN;
-        ENV.spotBorderBottom = ENV.chipBottom + MARGIN;
-
-        // Vị trí đường dọc bên phải (nối dài lên trên)
-        ENV.rightRoadLeft = ENV.spotBorderRight + ENV.Ed; 
-        ENV.rightRoadRight = ENV.rightRoadLeft + ENV.Ed;
-        ENV.rightRoadTop = 40; 
-        ENV.rightRoadBottom = ENV.roadBottom + 120; // Đường dọc kéo dài qua ngã 3 một chút
-
-        // Định nghĩa 3 đoạn vạch vàng để bắt lỗi va chạm (Chỉ cảnh báo)
-        yellowLines = [
-            { x1: ENV.chipLeft, y1: ENV.chipTop, x2: ENV.chipLeft, y2: ENV.chipBottom }, // Cạnh trái chuồng
-            { x1: ENV.chipRight, y1: ENV.chipTop, x2: ENV.chipRight, y2: ENV.chipBottom }, // Cạnh phải chuồng
-            { x1: ENV.chipLeft, y1: ENV.chipBottom, x2: ENV.chipRight, y2: ENV.chipBottom }  // Đáy chuồng
-        ];
-
-        // Định nghĩa các đường viền bao quanh toàn bộ bản đồ (Sẽ cản xe lại)
-        borderLines = [
-            {x1: ENV.mapLeft, y1: ENV.roadTop, x2: ENV.rightRoadLeft, y2: ENV.roadTop},
-            {x1: ENV.rightRoadLeft, y1: ENV.roadTop, x2: ENV.rightRoadLeft, y2: ENV.rightRoadTop},
-            {x1: ENV.rightRoadLeft, y1: ENV.rightRoadTop, x2: ENV.rightRoadRight, y2: ENV.rightRoadTop},
-            {x1: ENV.rightRoadRight, y1: ENV.rightRoadTop, x2: ENV.rightRoadRight, y2: ENV.rightRoadBottom},
-            {x1: ENV.rightRoadRight, y1: ENV.rightRoadBottom, x2: ENV.rightRoadLeft, y2: ENV.rightRoadBottom},
-            {x1: ENV.rightRoadLeft, y1: ENV.rightRoadBottom, x2: ENV.rightRoadLeft, y2: ENV.roadBottom},
-            {x1: ENV.rightRoadLeft, y1: ENV.roadBottom, x2: ENV.spotBorderRight, y2: ENV.roadBottom},
-            {x1: ENV.spotBorderRight, y1: ENV.roadBottom, x2: ENV.spotBorderRight, y2: ENV.spotBorderBottom},
-            {x1: ENV.spotBorderRight, y1: ENV.spotBorderBottom, x2: ENV.spotBorderLeft, y2: ENV.spotBorderBottom},
-            {x1: ENV.spotBorderLeft, y1: ENV.spotBorderBottom, x2: ENV.spotBorderLeft, y2: ENV.roadBottom},
-            {x1: ENV.spotBorderLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadBottom},
-            {x1: ENV.mapLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadTop} // Đóng khung bên trái
-        ];
-    }
-
-    // Reset vị trí xe về vị trí ban đầu (Trên đường dọc bên phải, hướng xuống)
-    function resetCarPosition() {
-        car.x = ENV.rightRoadLeft + (ENV.Ed / 2);
-        car.y = ENV.rightRoadTop + (ENV.carW / 2) + 20;
-        car.angle = Math.PI / 2; // Hướng xuống (90 độ)
-        car.steeringTurns = 0;
-        car.isMoving = false;
-        hasParkingSuccess = false;
-        hasExerciseCompleted = false;
-        warningMsg.style.display = 'none'; // Ẩn thông báo đè vạch nếu có
-    }
-
-    // Gắn sự kiện cho nút Reset
-    document.getElementById('btnReset').addEventListener('click', () => {
-        resetCarPosition();
-        car.gear = 1;
-        updateGearUI();
-        document.activeElement.blur(); // Bỏ focus khỏi nút sau khi click để tránh kẹt phím
-    });
-
-    // Lắng nghe thay đổi Cấu hình
-    document.getElementById('cfgCarA').oninput = (e) => { 
-        CAR_A = parseFloat(e.target.value) || 3.5; 
-        calculateEnvironment();
-        calculateMapOffset();
-        resetCarPosition();
-    };
-    document.getElementById('cfgCarB').oninput = (e) => { 
-        CAR_B = parseFloat(e.target.value) || 1.8; 
-        calculateEnvironment();
-        calculateMapOffset();
-        resetCarPosition();
-    };
-    document.getElementById('cfgMoveSpeed').oninput = (e) => { 
-        document.getElementById('valMove').innerText = e.target.value; GAME_CONFIG.moveSpeed = parseFloat(e.target.value); 
-    };
-    document.getElementById('cfgSteerSpeed').oninput = (e) => { 
-        document.getElementById('valSteer').innerText = e.target.value; GAME_CONFIG.steerSpeed = parseFloat(e.target.value); 
-    };
-
-    // Khởi tạo ban đầu
-    calculateEnvironment();
-    resetCarPosition();
-
-    // Tự động focus vào cửa sổ game khi di chuyển chuột vào để nhận phím ngay (không cần click)
-    window.addEventListener('mouseover', () => {
-        if (document.activeElement.tagName?.toLowerCase() !== 'input') {
-            window.focus();
-        }
-    });
-
-    // Điều khiển Bàn phím (Bỏ qua focus nếu đang nhập input)
-    window.addEventListener('keydown', (e) => {
-        if (e.target.tagName?.toLowerCase() === 'input') return;
-        const key = e.key.toLowerCase();
-        if(key === 'a') keys.A = true;
-        if(key === 'd') keys.D = true;
-    });
-    window.addEventListener('keyup', (e) => {
-        const key = e.key.toLowerCase();
-        if(key === 'a') keys.A = false;
-        if(key === 'd') keys.D = false;
-    });
-
-    // Cuộn chuột gài số
-    window.addEventListener('wheel', (e) => {
-        if (!e.target.closest('.dashboard')) {
-            if (e.deltaY < 0) car.gear = 1;      // Cuộn lên -> Tiến
-            else if (e.deltaY > 0) car.gear = -1; // Cuộn xuống -> Lùi
-            updateGearUI();
-            e.preventDefault();
-        }
-    }, { passive: false });
-
-    // Giữ chuột trái di chuyển
-    canvas.addEventListener('mousedown', (e) => {
-        if (e.button === 0) car.isMoving = true;
-    });
-    window.addEventListener('mouseup', (e) => {
-        if (e.button === 0) car.isMoving = false;
-    });
-    canvas.addEventListener('mouseleave', () => { car.isMoving = false; });
-
-    function updateGearUI() {
-        gearForward.className = 'gear ' + (car.gear === 1 ? 'active-forward' : '');
-        gearReverse.className = 'gear ' + (car.gear === -1 ? 'active-reverse' : '');
-    }
-
-    // Math: Kiểm tra 2 đoạn thẳng giao nhau
-    function linesIntersect(a, b, c, d, p, q, r, s) {
-        let det, gamma, lambda;
-        det = (c - a) * (s - q) - (r - p) * (d - b);
-        if (det === 0) return false;
-        lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
-        gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
-        return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
-    }
-
-    // Lấy tọa độ 4 góc của ô tô (Có thể truyền tọa độ ảo để dự đoán va chạm)
-    function getCarCorners(cx = car.x, cy = car.y, cangle = car.angle) {
-        const cos = Math.cos(cangle);
-        const sin = Math.sin(cangle);
-        // Hitbox bất đối xứng đầu/đuôi để khớp ảnh xe thật hơn
-        const front = (ENV.carW / 2) * COLLISION_FRONT_SCALE;
-        const rear = (ENV.carW / 2) * COLLISION_REAR_SCALE;
-        const halfSide = (ENV.carH / 2) * COLLISION_SIDE_SCALE;
-        return [
-            { x: cx + front*cos - halfSide*sin, y: cy + front*sin + halfSide*cos }, // Trái Dưới (Mũi)
-            { x: cx + front*cos + halfSide*sin, y: cy + front*sin - halfSide*cos }, // Phải Dưới (Mũi)
-            { x: cx - rear*cos + halfSide*sin, y: cy - rear*sin - halfSide*cos },   // Phải Trên (Đuôi)
-            { x: cx - rear*cos - halfSide*sin, y: cy - rear*sin + halfSide*cos }    // Trái Trên (Đuôi)
-        ];
-    }
-
-    function carLocalToWorld(localX, localY, cx = car.x, cy = car.y, cangle = car.angle) {
-        const cos = Math.cos(cangle);
-        const sin = Math.sin(cangle);
-        return {
-            x: cx + localX * cos - localY * sin,
-            y: cy + localX * sin + localY * cos
-        };
-    }
-
-    function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
-        const vx = x2 - x1;
-        const vy = y2 - y1;
-        const wx = px - x1;
-        const wy = py - y1;
-        const c1 = vx * wx + vy * wy;
-        if (c1 <= 0) return Math.hypot(px - x1, py - y1);
-        const c2 = vx * vx + vy * vy;
-        if (c2 <= c1) return Math.hypot(px - x2, py - y2);
-        const t = c1 / c2;
-        const projX = x1 + t * vx;
-        const projY = y1 + t * vy;
-        return Math.hypot(px - projX, py - projY);
-    }
-
-    function isCarInsideRightVerticalRoad() {
-        const marginX = ENV.carH * 0.35;
-        const marginY = ENV.carW * 0.35;
-        return (
-            car.x >= ENV.rightRoadLeft + marginX &&
-            car.x <= ENV.rightRoadRight - marginX &&
-            car.y >= ENV.rightRoadTop + marginY &&
-            car.y <= ENV.rightRoadBottom - marginY
-        );
-    }
-
-    function updateParkingMilestones(isHittingBorder, isHittingYellowLine) {
-        if (isHittingBorder || isHittingYellowLine) return;
-
-        const inSpotArea = (
-            car.x >= ENV.spotBorderLeft && car.x <= ENV.spotBorderRight &&
-            car.y >= ENV.roadBottom && car.y <= ENV.spotBorderBottom
-        );
-
-        if (!hasParkingSuccess && inSpotArea) {
-            const corners = getCarCorners();
-            const rearLeft = corners[3];
-            const rearRight = corners[2];
-            const bottomLine = yellowLines[2];
-
-            const d1 = pointToSegmentDistance(rearLeft.x, rearLeft.y, bottomLine.x1, bottomLine.y1, bottomLine.x2, bottomLine.y2);
-            const d2 = pointToSegmentDistance(rearRight.x, rearRight.y, bottomLine.x1, bottomLine.y1, bottomLine.x2, bottomLine.y2);
-            const rearToBottomLineM = Math.min(d1, d2) / SCALE;
-
-            if (rearToBottomLineM >= 0.1 && rearToBottomLineM <= 0.3) {
-                hasParkingSuccess = true;
-            }
-        }
-
-        if (hasParkingSuccess && !hasExerciseCompleted && isCarInsideRightVerticalRoad()) {
-            hasExerciseCompleted = true;
-        }
-    }
-
-    function prepareCarImageCrop() {
-        if (!carImage.complete || carImage.naturalWidth <= 0 || carImage.naturalHeight <= 0) return;
-        if (carImageCrop.ready) return;
-
-        const w = carImage.naturalWidth;
-        const h = carImage.naturalHeight;
-        const off = document.createElement('canvas');
-        off.width = w;
-        off.height = h;
-        const offCtx = off.getContext('2d');
-        offCtx.drawImage(carImage, 0, 0);
-        const data = offCtx.getImageData(0, 0, w, h).data;
-
-        let minX = w, minY = h, maxX = -1, maxY = -1;
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const alpha = data[(y * w + x) * 4 + 3];
-                if (alpha > 12) {
-                    if (x < minX) minX = x;
-                    if (y < minY) minY = y;
-                    if (x > maxX) maxX = x;
-                    if (y > maxY) maxY = y;
-                }
-            }
-        }
-
-        if (maxX >= minX && maxY >= minY) {
-            carImageCrop.sx = minX;
-            carImageCrop.sy = minY;
-            carImageCrop.sw = maxX - minX + 1;
-            carImageCrop.sh = maxY - minY + 1;
-        } else {
-            carImageCrop.sx = 0;
-            carImageCrop.sy = 0;
-            carImageCrop.sw = w;
-            carImageCrop.sh = h;
-        }
-        carImageCrop.ready = true;
-    }
-
-    // Vẽ đường vô hạn đi qua 1 điểm theo hướng dir, sau đó cắt trong bbox map
-    function drawClippedGuideLine(px, py, dx, dy, minX, minY, maxX, maxY) {
-        const EPS = 1e-6;
-        const hits = [];
-
-        if (Math.abs(dx) > EPS) {
-            const tLeft = (minX - px) / dx;
-            const yLeft = py + tLeft * dy;
-            if (yLeft >= minY - EPS && yLeft <= maxY + EPS) hits.push({ x: minX, y: yLeft, t: tLeft });
-
-            const tRight = (maxX - px) / dx;
-            const yRight = py + tRight * dy;
-            if (yRight >= minY - EPS && yRight <= maxY + EPS) hits.push({ x: maxX, y: yRight, t: tRight });
-        }
-
-        if (Math.abs(dy) > EPS) {
-            const tTop = (minY - py) / dy;
-            const xTop = px + tTop * dx;
-            if (xTop >= minX - EPS && xTop <= maxX + EPS) hits.push({ x: xTop, y: minY, t: tTop });
-
-            const tBottom = (maxY - py) / dy;
-            const xBottom = px + tBottom * dx;
-            if (xBottom >= minX - EPS && xBottom <= maxX + EPS) hits.push({ x: xBottom, y: maxY, t: tBottom });
-        }
-
-        if (hits.length < 2) return;
-        hits.sort((a, b) => a.t - b.t);
-        const p1 = hits[0];
-        const p2 = hits[hits.length - 1];
-
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
-    }
-
-    function updateSteeringUIState(timeMs) {
-        const isNeutral = Math.abs(car.steeringTurns) <= STEER_NEUTRAL_THRESHOLD;
-
-        if (isNeutral && !wasInNeutralZone) {
-            // Khi vừa về thẳng lái, giữ trạng thái này thêm 1 khoảng thời gian
-            steerHoldUntilMs = timeMs + (STRAIGHT_STEER_HOLD_SEC * 1000);
-            steerUIState = 'straight';
-        } else if (isNeutral) {
-            steerUIState = 'straight';
-        } else {
-            // Chưa hết thời gian hold thì vẫn hiển thị "Thẳng lái"
-            if (timeMs >= steerHoldUntilMs) {
-                steerUIState = car.steeringTurns < 0 ? 'left' : 'right';
-            } else {
-                steerUIState = 'straight';
-            }
-        }
-
-        wasInNeutralZone = isNeutral;
-    }
-
-    let lastTime = 0;
-    function update(time) {
-        const dt = (time - lastTime) / 1000 || 0; 
-        lastTime = time;
-
-        // Vô lăng
-        let steerDelta = GAME_CONFIG.steerSpeed * dt;
-        if (keys.A) car.steeringTurns -= steerDelta;
-        if (keys.D) car.steeringTurns += steerDelta;
-        car.steeringTurns = Math.max(-GAME_CONFIG.maxSteerTurns, Math.min(GAME_CONFIG.maxSteerTurns, car.steeringTurns));
-
-        wheelImg.style.transform = `rotate(${car.steeringTurns * 360}deg)`;
-        updateSteeringUIState(time);
-        let turnsAbs = Math.abs(car.steeringTurns).toFixed(1);
-        if (steerUIState === 'left') {
-            steeringText.innerText = `Lái trái: ${turnsAbs}`;
-            steeringText.className = 'w-24 text-base font-bold text-red-400 text-center'; 
-        } else if (steerUIState === 'right') {
-            steeringText.innerText = `Lái phải: ${turnsAbs}`;
-            steeringText.className = 'w-24 text-base font-bold text-blue-400 text-center'; 
-        } else {
-            steeringText.innerText = `Thẳng lái`;
-            steeringText.className = 'w-24 text-base font-bold text-yellow-400 text-center'; 
-        }
-
-        let isHittingBorder = false;
-        let isHittingYellowLine = false;
-
-        // Vật lý di chuyển
-        if (car.isMoving && car.gear !== 0) {
-            let wheelAngleRad = (car.steeringTurns / GAME_CONFIG.maxSteerTurns) * GAME_CONFIG.maxSteerAngleRad;
-            let wheelbase = ENV.carW * 0.6; 
-            let velocity = GAME_CONFIG.moveSpeed * 60 * dt * car.gear;
-
-            // Tính toán tọa độ và góc xoay ở frame tiếp theo (chưa gán ngay)
-            let nextX = car.x + Math.cos(car.angle) * velocity;
-            let nextY = car.y + Math.sin(car.angle) * velocity;
-            let nextAngle = car.angle + (velocity / wheelbase) * Math.tan(wheelAngleRad);
-
-            // Sinh 4 góc xe ảo ở frame tiếp theo
-            const nextCorners = getCarCorners(nextX, nextY, nextAngle);
-            const nextEdges = [
-                [nextCorners[0], nextCorners[1]], [nextCorners[1], nextCorners[2]],
-                [nextCorners[2], nextCorners[3]], [nextCorners[3], nextCorners[0]]
-            ];
-
-            // Rà soát va chạm vật lý với tường/lề ở vị trí ảo đó
-            for (let edge of nextEdges) {
-                for (let line of borderLines) {
-                    if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
-                        isHittingBorder = true; break;
-                    }
-                }
-                if (isHittingBorder) break;
-            }
-
-            // Nếu không bị cản bởi tường, mới chính thức cho phép xe di chuyển tới đó
-            if (!isHittingBorder) {
-                car.x = nextX;
-                car.y = nextY;
-                car.angle = nextAngle;
-            }
-        }
-
-        // --- Cập nhật cảnh báo dựa trên tọa độ CHÍNH THỨC của xe hiện tại ---
-        const currentCorners = getCarCorners();
-        const currentEdges = [
-            [currentCorners[0], currentCorners[1]], [currentCorners[1], currentCorners[2]],
-            [currentCorners[2], currentCorners[3]], [currentCorners[3], currentCorners[0]]
-        ];
-
-        // 1. Kiểm tra vạch chip vàng (Bị trừ điểm)
-        for (let edge of currentEdges) {
-            for (let line of yellowLines) {
-                if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
-                    isHittingYellowLine = true; break;
-                }
-            }
-            if (isHittingYellowLine) break;
-        }
-
-        // 2. Kiểm tra lại lề ở trạng thái hiện tại (Đề phòng trường hợp thay đổi kích thước xe làm xe đột ngột đè lên lề)
-        if (!isHittingBorder) { 
-            for (let edge of currentEdges) {
-                for (let line of borderLines) {
-                    if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
-                        isHittingBorder = true; break;
-                    }
-                }
-                if (isHittingBorder) break;
-            }
-        }
-
-        // 3. Cập nhật milestone và hiển thị thông báo trên màn hình
-        updateParkingMilestones(isHittingBorder, isHittingYellowLine);
-
-        if (isHittingBorder) {
-            warningMsg.innerText = "⚠️ XE CHẠM LỀ ⚠️";
-            warningMsg.style.backgroundColor = "#991b1b"; // Đỏ sậm
-            warningMsg.style.display = 'block';
-        } else if (isHittingYellowLine) {
-            warningMsg.innerText = "⚠️ XE ĐÈ VẠCH ⚠️";
-            warningMsg.style.backgroundColor = "#ef4444"; // Đỏ tươi
-            warningMsg.style.display = 'block';
-        } else if (hasExerciseCompleted) {
-            warningMsg.innerText = "🎉 HOÀN THÀNH BÀI GHÉP XE 🎉";
-            warningMsg.style.backgroundColor = "#065f46";
-            warningMsg.style.display = 'block';
-        } else if (hasParkingSuccess) {
-            warningMsg.innerText = "✅ GHÉP XE THÀNH CÔNG ✅";
-            warningMsg.style.backgroundColor = "#15803d";
-            warningMsg.style.display = 'block';
-        } else {
-            warningMsg.style.display = 'none';
-        }
-    }
-
-    function draw() {
-        // Nền cỏ
-        ctx.fillStyle = '#16a34a'; 
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.translate(mapOffsetX, mapOffsetY);
-        // -- VẼ PATH BAO QUANH BẢN ĐỒ --
-        ctx.beginPath();
-        ctx.moveTo(ENV.mapLeft, ENV.roadTop); // Bắt đầu từ góc trái trên đường ngang
-        ctx.lineTo(ENV.rightRoadLeft, ENV.roadTop); // Kéo sang phải đến lề đường dọc
-        ctx.lineTo(ENV.rightRoadLeft, ENV.rightRoadTop); // Kéo lên trên
-        ctx.lineTo(ENV.rightRoadRight, ENV.rightRoadTop); // Sang ngang đỉnh đường dọc
-        ctx.lineTo(ENV.rightRoadRight, ENV.rightRoadBottom); // Kéo thẳng xuống đáy phải
-        ctx.lineTo(ENV.rightRoadLeft, ENV.rightRoadBottom); // Sang ngang đáy ngã 3
-        ctx.lineTo(ENV.rightRoadLeft, ENV.roadBottom); // Đi ngược lên chạm đáy đường ngang
-        ctx.lineTo(ENV.spotBorderRight, ENV.roadBottom); // Đi sang trái đến lề chuồng đỗ
-        ctx.lineTo(ENV.spotBorderRight, ENV.spotBorderBottom); // Kéo xuống đáy chuồng
-        ctx.lineTo(ENV.spotBorderLeft, ENV.spotBorderBottom); // Sang ngang đáy chuồng
-        ctx.lineTo(ENV.spotBorderLeft, ENV.roadBottom); // Kéo lên miệng chuồng
-        ctx.lineTo(ENV.mapLeft, ENV.roadBottom); // Kéo về góc trái dưới đường ngang
-        ctx.closePath();
-
-        // Fill màu đường nhựa
-        ctx.fillStyle = '#94a3b8';
-        ctx.fill();
-
-        // Stroke Border Trắng Đỏ liên tục
-        ctx.lineWidth = 6;
-        ctx.strokeStyle = 'white'; // Lớp nền trắng
-        ctx.setLineDash([]);
-        ctx.stroke();
-
-        ctx.strokeStyle = '#ef4444'; // Lớp vạch đỏ đứt khúc
-        ctx.setLineDash([20, 20]);
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset
-
-        // -- VẼ VẠCH CHIP VÀNG (Gọn gàng bên trong chuồng) --
-        ctx.beginPath();
-        ctx.moveTo(yellowLines[0].x1, yellowLines[0].y1); ctx.lineTo(yellowLines[0].x2, yellowLines[0].y2); // Trái
-        ctx.moveTo(yellowLines[1].x1, yellowLines[1].y1); ctx.lineTo(yellowLines[1].x2, yellowLines[1].y2); // Phải
-        ctx.moveTo(yellowLines[2].x1, yellowLines[2].y1); ctx.lineTo(yellowLines[2].x2, yellowLines[2].y2); // Đáy
-        ctx.strokeStyle = '#eab308';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // -- VẼ CHỮ GHI CHÚ KÍCH THƯỚC --
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        
-        // Ghi chú Ed ngang
-        ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, ENV.mapLeft + (ENV.spotBorderLeft - ENV.mapLeft)/2, ENV.roadBottom + 25);
-        // Ghi chú Ed dọc (đường bên phải)
-        ctx.save();
-        ctx.translate(ENV.rightRoadLeft - 15, ENV.roadTop - 50);
-        ctx.rotate(-Math.PI/2);
-        ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, 0, 0);
-        ctx.restore();
-
-        // Ghi chú Ld (vạch vàng)
-        ctx.save();
-        // Đẩy chữ ra ngoài border phải để không đè lên vạch đỏ-trắng
-        ctx.translate(ENV.spotBorderRight + 15, ENV.chipTop + ENV.Ld/2);
-        ctx.rotate(Math.PI/2);
-        ctx.fillStyle = '#fde047';
-        ctx.fillText(`Ld = ${ENV.Ld_m.toFixed(2)}m`, 0, 0);
-        ctx.restore();
-        
-        // Ghi chú Rd (vạch vàng)
-        ctx.fillText(`Rd = ${ENV.Rd_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rd/2, ENV.chipBottom - 10);
-
-        // -- VẼ Ô TÔ --
-        ctx.save();
-        ctx.translate(car.x, car.y);
-        ctx.rotate(car.angle);
-        
-        if (carImage.complete && carImage.naturalWidth > 0) {
-            prepareCarImageCrop();
-            if (carImageCrop.ready) {
-                ctx.drawImage(
-                    carImage,
-                    carImageCrop.sx, carImageCrop.sy, carImageCrop.sw, carImageCrop.sh,
-                    -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH
+    
+        <!-- Load xe -->
+        <img id="carImg" src="car.png" style="display: none;">
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+    
+        // UI Elements
+        const wheelImg = document.getElementById('wheelImg');
+        const steeringText = document.getElementById('steeringText');
+        const gearForward = document.getElementById('gearForward');
+        const gearReverse = document.getElementById('gearReverse');
+        const warningMsg = document.getElementById('warningMsg');
+        const carImage = document.getElementById('carImg');
+        const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
+    
+        // TỶ LỆ CHUYỂN ĐỔI: 1 mét = 45 pixels
+        const SCALE = 45; 
+        // Khoảng dư của chuồng so với xe (m) để giữ tỉ lệ trực quan hợp lý
+        const PARKING_CLEARANCE_LENGTH_M = 0.6;
+        const PARKING_CLEARANCE_WIDTH_M = 0.6;
+    
+        // Các biến Kích thước & Môi trường
+        let CAR_A = 4;
+        let CAR_B = 2;
+        let ENV = {};
+        let yellowLines = [];
+        let borderLines = []; // Thêm mảng chứa các đường bao quanh map để chặn xe
+    
+            // Offset để căn giữa bản đồ trên canvas
+            let mapOffsetX = 0, mapOffsetY = 0;
+    
+            // Hàm tính toán offset để căn giữa map vào canvas
+            function calculateMapOffset() {
+                // Xác định bounding box của map
+                // Lấy các giá trị min/max của các điểm đặc trưng
+                const minX = ENV.mapLeft;
+                const maxX = Math.max(
+                    ENV.rightRoadRight,
+                    ENV.spotBorderRight
                 );
-            } else {
-                ctx.drawImage(carImage, -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+                const minY = Math.min(
+                    ENV.roadTop,
+                    ENV.rightRoadTop
+                );
+                const maxY = Math.max(
+                    ENV.rightRoadBottom,
+                    ENV.spotBorderBottom
+                );
+                const mapWidth = maxX - minX;
+                const mapHeight = maxY - minY;
+                // Căn giữa map trong canvas
+                mapOffsetX = (canvas.width - mapWidth) / 2 - minX;
+                mapOffsetY = (canvas.height - mapHeight) / 2 - minY;
             }
-        } else {
-            ctx.fillStyle = 'red';
-            ctx.fillRect(-ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
-            ctx.fillStyle = 'yellow'; // Đầu xe
-            ctx.fillRect(ENV.carW/2 - 10, -ENV.carH/2, 10, ENV.carH);
+    
+        const GAME_CONFIG = {
+            moveSpeed: 0.5, 
+            steerSpeed: 1.0, 
+            maxSteerTurns: 2.5,
+            maxSteerAngleRad: 40 * (Math.PI / 180), 
+        };
+    
+        const car = {
+            x: 0, y: 0,
+            angle: Math.PI / 2, // Mặt định quay xuống dưới (90 độ)
+            steeringTurns: 0, 
+            gear: 1, 
+            isMoving: false
+        };
+    
+        const keys = { A: false, D: false };
+    
+        // Tinh chỉnh hitbox va chạm để sát thân xe hơn (tính theo tỷ lệ kích thước xe)
+        // Các hệ số này tự scale theo CAR_A/CAR_B khi bạn đổi kích thước xe.
+        const COLLISION_FRONT_SCALE = 0.80; // Nửa đầu xe (mũi)
+        const COLLISION_REAR_SCALE = 0.72;  // Nửa đuôi xe (ảnh thường có đổ bóng/viền)
+        const COLLISION_SIDE_SCALE = 0.72;  // Nửa bề rộng xe
+        const SHOW_HITBOX_DEBUG = false;    // Bật true để vẽ hitbox kiểm tra trực quan
+    
+        // Đường căn mờ bám theo xe (tọa độ local theo tâm xe)
+        // +localX: về phía đầu xe, -localX: về phía đuôi xe
+        // +localY: lệch xuống dưới ảnh, -localY: lệch lên trên ảnh
+        const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 }; // Vị trí vô lăng theo tỷ lệ carW/carH
+        const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 }; // Vị trí ghế lái theo tỷ lệ carW/carH
+    
+        // Giữ trạng thái "Thẳng lái" trước khi chuyển trái/phải (đơn vị: giây)
+        const STRAIGHT_STEER_HOLD_SEC = 0.1; // <-- Bạn có thể tự chỉnh tại đây
+        const STEER_NEUTRAL_THRESHOLD = 0.05;
+        let steerUIState = 'straight';
+        let steerHoldUntilMs = 0;
+        let wasInNeutralZone = true;
+        let hasParkingSuccess = false;
+        let hasExerciseCompleted = false;
+    
+        // Hàm tính toán Hình học toàn bộ bản đồ
+        function calculateEnvironment() {
+            const Ld_m = CAR_A + PARKING_CLEARANCE_LENGTH_M;
+            const Rd_m = CAR_B + PARKING_CLEARANCE_WIDTH_M;
+            const Ed_m = 1.2 * CAR_A;
+    
+            ENV.carW = CAR_A * SCALE; 
+            ENV.carH = CAR_B * SCALE; 
+            ENV.Ld = Ld_m * SCALE;    
+            ENV.Rd = Rd_m * SCALE;    
+            ENV.Ed = Ed_m * SCALE;    
+            ENV.Ld_m = Ld_m;
+            ENV.Rd_m = Rd_m;
+            ENV.Ed_m = Ed_m;
+    
+            const MARGIN = 18; // Lề giữa vạch vàng (chip) và viền ngoài (border)
+    
+            // Các mốc tọa độ chính để vẽ bản đồ
+            ENV.mapLeft = 40; 
+            ENV.roadTop = 260; // Đường ngang bắt đầu hơi thấp để nhường chỗ cho đường dọc bên phải
+            ENV.roadBottom = ENV.roadTop + ENV.Ed;
+    
+            // Vị trí chuồng đỗ (Border ngoài) - Cạnh trái
+            ENV.spotBorderLeft = ENV.mapLeft + ENV.Ed + 20; // Cách đường cụt bên trái 1 đoạn
+    
+            // Tọa độ Vạch Vàng (Chip) - Lùi xuống 1 khoảng MARGIN so với miệng chuồng
+            ENV.chipTop = ENV.roadBottom + MARGIN;
+            ENV.chipBottom = ENV.chipTop + ENV.Ld;
+            ENV.chipLeft = ENV.spotBorderLeft + MARGIN;
+            ENV.chipRight = ENV.chipLeft + ENV.Rd;
+    
+            // Cập nhật lại Border phải và đáy dựa trên vạch chip để bao ngoài đều nhau
+            ENV.spotBorderRight = ENV.chipRight + MARGIN;
+            ENV.spotBorderBottom = ENV.chipBottom + MARGIN;
+    
+            // Vị trí đường dọc bên phải (nối dài lên trên)
+            ENV.rightRoadLeft = ENV.spotBorderRight + ENV.Ed; 
+            ENV.rightRoadRight = ENV.rightRoadLeft + ENV.Ed;
+            ENV.rightRoadTop = 40; 
+            ENV.rightRoadBottom = ENV.roadBottom + 120; // Đường dọc kéo dài qua ngã 3 một chút
+    
+            // Định nghĩa 3 đoạn vạch vàng để bắt lỗi va chạm (Chỉ cảnh báo)
+            yellowLines = [
+                { x1: ENV.chipLeft, y1: ENV.chipTop, x2: ENV.chipLeft, y2: ENV.chipBottom }, // Cạnh trái chuồng
+                { x1: ENV.chipRight, y1: ENV.chipTop, x2: ENV.chipRight, y2: ENV.chipBottom }, // Cạnh phải chuồng
+                { x1: ENV.chipLeft, y1: ENV.chipBottom, x2: ENV.chipRight, y2: ENV.chipBottom }  // Đáy chuồng
+            ];
+    
+            // Định nghĩa các đường viền bao quanh toàn bộ bản đồ (Sẽ cản xe lại)
+            borderLines = [
+                {x1: ENV.mapLeft, y1: ENV.roadTop, x2: ENV.rightRoadLeft, y2: ENV.roadTop},
+                {x1: ENV.rightRoadLeft, y1: ENV.roadTop, x2: ENV.rightRoadLeft, y2: ENV.rightRoadTop},
+                {x1: ENV.rightRoadLeft, y1: ENV.rightRoadTop, x2: ENV.rightRoadRight, y2: ENV.rightRoadTop},
+                {x1: ENV.rightRoadRight, y1: ENV.rightRoadTop, x2: ENV.rightRoadRight, y2: ENV.rightRoadBottom},
+                {x1: ENV.rightRoadRight, y1: ENV.rightRoadBottom, x2: ENV.rightRoadLeft, y2: ENV.rightRoadBottom},
+                {x1: ENV.rightRoadLeft, y1: ENV.rightRoadBottom, x2: ENV.rightRoadLeft, y2: ENV.roadBottom},
+                {x1: ENV.rightRoadLeft, y1: ENV.roadBottom, x2: ENV.spotBorderRight, y2: ENV.roadBottom},
+                {x1: ENV.spotBorderRight, y1: ENV.roadBottom, x2: ENV.spotBorderRight, y2: ENV.spotBorderBottom},
+                {x1: ENV.spotBorderRight, y1: ENV.spotBorderBottom, x2: ENV.spotBorderLeft, y2: ENV.spotBorderBottom},
+                {x1: ENV.spotBorderLeft, y1: ENV.spotBorderBottom, x2: ENV.spotBorderLeft, y2: ENV.roadBottom},
+                {x1: ENV.spotBorderLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadBottom},
+                {x1: ENV.mapLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadTop} // Đóng khung bên trái
+            ];
         }
-
-        ctx.restore();
-
-        // -- VẼ 2 ĐƯỜNG CĂN MỜ (bám theo xe) --
-        const mapMinX = ENV.mapLeft;
-        const mapMaxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
-        const mapMinY = Math.min(ENV.roadTop, ENV.rightRoadTop);
-        const mapMaxY = Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom);
-
-        const steeringPos = carLocalToWorld(
-            ENV.carW * STEERING_LOCAL_RATIO.x,
-            ENV.carH * STEERING_LOCAL_RATIO.y
-        );
-        const driverSeatPos = carLocalToWorld(
-            ENV.carW * DRIVER_SEAT_LOCAL_RATIO.x,
-            ENV.carH * DRIVER_SEAT_LOCAL_RATIO.y
-        );
-
-        ctx.save();
-        ctx.strokeStyle = 'rgba(253, 230, 138, 0.72)'; // vàng nhạt
-        ctx.lineWidth = 1;
-        ctx.setLineDash([7, 7]);
-
-        // Đồng bộ theo góc xe: dọc theo trục thân xe, ngang vuông góc thân xe
-        const dirLongX = Math.cos(car.angle);
-        const dirLongY = Math.sin(car.angle);
-        const dirSideX = -Math.sin(car.angle);
-        const dirSideY = Math.cos(car.angle);
-
-        // Đường căn dọc qua vị trí vô lăng
-        drawClippedGuideLine(
-            steeringPos.x, steeringPos.y,
-            dirLongX, dirLongY,
-            mapMinX, mapMinY, mapMaxX, mapMaxY
-        );
-
-        // Đường căn ngang qua vị trí ghế lái
-        drawClippedGuideLine(
-            driverSeatPos.x, driverSeatPos.y,
-            dirSideX, dirSideY,
-            mapMinX, mapMinY, mapMaxX, mapMaxY
-        );
-
-        ctx.setLineDash([]);
-        ctx.restore();
-
-        if (SHOW_HITBOX_DEBUG) {
-            const corners = getCarCorners(car.x, car.y, car.angle);
-            ctx.strokeStyle = '#22d3ee';
-            ctx.lineWidth = 2;
+    
+        // Reset vị trí xe về vị trí ban đầu (Trên đường dọc bên phải, hướng xuống)
+        function resetCarPosition() {
+            car.x = ENV.rightRoadLeft + (ENV.Ed / 2);
+            car.y = ENV.rightRoadTop + (ENV.carW / 2) + 20;
+            car.angle = Math.PI / 2; // Hướng xuống (90 độ)
+            car.steeringTurns = 0;
+            car.isMoving = false;
+            hasParkingSuccess = false;
+            hasExerciseCompleted = false;
+            warningMsg.style.display = 'none'; // Ẩn thông báo đè vạch nếu có
+        }
+    
+        // Gắn sự kiện cho nút Reset
+        document.getElementById('btnReset').addEventListener('click', () => {
+            resetCarPosition();
+            car.gear = 1;
+            updateGearUI();
+            document.activeElement.blur(); // Bỏ focus khỏi nút sau khi click để tránh kẹt phím
+        });
+    
+        // Lắng nghe thay đổi Cấu hình
+        document.getElementById('cfgCarA').oninput = (e) => { 
+            CAR_A = parseFloat(e.target.value) || 3.5; 
+            calculateEnvironment();
+            calculateMapOffset();
+            resetCarPosition();
+        };
+        document.getElementById('cfgCarB').oninput = (e) => { 
+            CAR_B = parseFloat(e.target.value) || 1.8; 
+            calculateEnvironment();
+            calculateMapOffset();
+            resetCarPosition();
+        };
+        document.getElementById('cfgMoveSpeed').oninput = (e) => { 
+            document.getElementById('valMove').innerText = e.target.value; GAME_CONFIG.moveSpeed = parseFloat(e.target.value); 
+        };
+        document.getElementById('cfgSteerSpeed').oninput = (e) => { 
+            document.getElementById('valSteer').innerText = e.target.value; GAME_CONFIG.steerSpeed = parseFloat(e.target.value); 
+        };
+    
+        // Khởi tạo ban đầu
+        calculateEnvironment();
+        resetCarPosition();
+    
+        // Tự động focus vào cửa sổ game khi di chuyển chuột vào để nhận phím ngay (không cần click)
+        window.addEventListener('mouseover', () => {
+            if (document.activeElement.tagName?.toLowerCase() !== 'input') {
+                window.focus();
+            }
+        });
+    
+        // Điều khiển Bàn phím (Bỏ qua focus nếu đang nhập input)
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName?.toLowerCase() === 'input') return;
+            const key = e.key.toLowerCase();
+            if(key === 'a') keys.A = true;
+            if(key === 'd') keys.D = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if(key === 'a') keys.A = false;
+            if(key === 'd') keys.D = false;
+        });
+    
+        // Cuộn chuột gài số
+        window.addEventListener('wheel', (e) => {
+            if (!e.target.closest('.dashboard')) {
+                if (e.deltaY < 0) car.gear = 1;      // Cuộn lên -> Tiến
+                else if (e.deltaY > 0) car.gear = -1; // Cuộn xuống -> Lùi
+                updateGearUI();
+                e.preventDefault();
+            }
+        }, { passive: false });
+    
+        // Giữ chuột trái di chuyển
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) car.isMoving = true;
+        });
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0) car.isMoving = false;
+        });
+        canvas.addEventListener('mouseleave', () => { car.isMoving = false; });
+    
+        function updateGearUI() {
+            gearForward.className = 'gear ' + (car.gear === 1 ? 'active-forward' : '');
+            gearReverse.className = 'gear ' + (car.gear === -1 ? 'active-reverse' : '');
+        }
+    
+        // Math: Kiểm tra 2 đoạn thẳng giao nhau
+        function linesIntersect(a, b, c, d, p, q, r, s) {
+            let det, gamma, lambda;
+            det = (c - a) * (s - q) - (r - p) * (d - b);
+            if (det === 0) return false;
+            lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+            gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+            return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+        }
+    
+        // Lấy tọa độ 4 góc của ô tô (Có thể truyền tọa độ ảo để dự đoán va chạm)
+        function getCarCorners(cx = car.x, cy = car.y, cangle = car.angle) {
+            const cos = Math.cos(cangle);
+            const sin = Math.sin(cangle);
+            // Hitbox bất đối xứng đầu/đuôi để khớp ảnh xe thật hơn
+            const front = (ENV.carW / 2) * COLLISION_FRONT_SCALE;
+            const rear = (ENV.carW / 2) * COLLISION_REAR_SCALE;
+            const halfSide = (ENV.carH / 2) * COLLISION_SIDE_SCALE;
+            return [
+                { x: cx + front*cos - halfSide*sin, y: cy + front*sin + halfSide*cos }, // Trái Dưới (Mũi)
+                { x: cx + front*cos + halfSide*sin, y: cy + front*sin - halfSide*cos }, // Phải Dưới (Mũi)
+                { x: cx - rear*cos + halfSide*sin, y: cy - rear*sin - halfSide*cos },   // Phải Trên (Đuôi)
+                { x: cx - rear*cos - halfSide*sin, y: cy - rear*sin + halfSide*cos }    // Trái Trên (Đuôi)
+            ];
+        }
+    
+        function carLocalToWorld(localX, localY, cx = car.x, cy = car.y, cangle = car.angle) {
+            const cos = Math.cos(cangle);
+            const sin = Math.sin(cangle);
+            return {
+                x: cx + localX * cos - localY * sin,
+                y: cy + localX * sin + localY * cos
+            };
+        }
+    
+        function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+            const vx = x2 - x1;
+            const vy = y2 - y1;
+            const wx = px - x1;
+            const wy = py - y1;
+            const c1 = vx * wx + vy * wy;
+            if (c1 <= 0) return Math.hypot(px - x1, py - y1);
+            const c2 = vx * vx + vy * vy;
+            if (c2 <= c1) return Math.hypot(px - x2, py - y2);
+            const t = c1 / c2;
+            const projX = x1 + t * vx;
+            const projY = y1 + t * vy;
+            return Math.hypot(px - projX, py - projY);
+        }
+    
+        function isCarInsideRightVerticalRoad() {
+            const marginX = ENV.carH * 0.35;
+            const marginY = ENV.carW * 0.35;
+            return (
+                car.x >= ENV.rightRoadLeft + marginX &&
+                car.x <= ENV.rightRoadRight - marginX &&
+                car.y >= ENV.rightRoadTop + marginY &&
+                car.y <= ENV.rightRoadBottom - marginY
+            );
+        }
+    
+        function updateParkingMilestones(isHittingBorder, isHittingYellowLine) {
+            if (isHittingBorder || isHittingYellowLine) return;
+    
+            const inSpotArea = (
+                car.x >= ENV.spotBorderLeft && car.x <= ENV.spotBorderRight &&
+                car.y >= ENV.roadBottom && car.y <= ENV.spotBorderBottom
+            );
+    
+            if (!hasParkingSuccess && inSpotArea) {
+                const corners = getCarCorners();
+                const rearLeft = corners[3];
+                const rearRight = corners[2];
+                const bottomLine = yellowLines[2];
+    
+                const d1 = pointToSegmentDistance(rearLeft.x, rearLeft.y, bottomLine.x1, bottomLine.y1, bottomLine.x2, bottomLine.y2);
+                const d2 = pointToSegmentDistance(rearRight.x, rearRight.y, bottomLine.x1, bottomLine.y1, bottomLine.x2, bottomLine.y2);
+                const rearToBottomLineM = Math.min(d1, d2) / SCALE;
+    
+                if (rearToBottomLineM >= 0.1 && rearToBottomLineM <= 0.3) {
+                    hasParkingSuccess = true;
+                }
+            }
+    
+            if (hasParkingSuccess && !hasExerciseCompleted && isCarInsideRightVerticalRoad()) {
+                hasExerciseCompleted = true;
+            }
+        }
+    
+        function prepareCarImageCrop() {
+            if (!carImage.complete || carImage.naturalWidth <= 0 || carImage.naturalHeight <= 0) return;
+            if (carImageCrop.ready) return;
+    
+            const w = carImage.naturalWidth;
+            const h = carImage.naturalHeight;
+            const off = document.createElement('canvas');
+            off.width = w;
+            off.height = h;
+            const offCtx = off.getContext('2d');
+            offCtx.drawImage(carImage, 0, 0);
+            const data = offCtx.getImageData(0, 0, w, h).data;
+    
+            let minX = w, minY = h, maxX = -1, maxY = -1;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const alpha = data[(y * w + x) * 4 + 3];
+                    if (alpha > 12) {
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if (x > maxX) maxX = x;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+    
+            if (maxX >= minX && maxY >= minY) {
+                carImageCrop.sx = minX;
+                carImageCrop.sy = minY;
+                carImageCrop.sw = maxX - minX + 1;
+                carImageCrop.sh = maxY - minY + 1;
+            } else {
+                carImageCrop.sx = 0;
+                carImageCrop.sy = 0;
+                carImageCrop.sw = w;
+                carImageCrop.sh = h;
+            }
+            carImageCrop.ready = true;
+        }
+    
+        // Vẽ đường vô hạn đi qua 1 điểm theo hướng dir, sau đó cắt trong bbox map
+        function drawClippedGuideLine(px, py, dx, dy, minX, minY, maxX, maxY) {
+            const EPS = 1e-6;
+            const hits = [];
+    
+            if (Math.abs(dx) > EPS) {
+                const tLeft = (minX - px) / dx;
+                const yLeft = py + tLeft * dy;
+                if (yLeft >= minY - EPS && yLeft <= maxY + EPS) hits.push({ x: minX, y: yLeft, t: tLeft });
+    
+                const tRight = (maxX - px) / dx;
+                const yRight = py + tRight * dy;
+                if (yRight >= minY - EPS && yRight <= maxY + EPS) hits.push({ x: maxX, y: yRight, t: tRight });
+            }
+    
+            if (Math.abs(dy) > EPS) {
+                const tTop = (minY - py) / dy;
+                const xTop = px + tTop * dx;
+                if (xTop >= minX - EPS && xTop <= maxX + EPS) hits.push({ x: xTop, y: minY, t: tTop });
+    
+                const tBottom = (maxY - py) / dy;
+                const xBottom = px + tBottom * dx;
+                if (xBottom >= minX - EPS && xBottom <= maxX + EPS) hits.push({ x: xBottom, y: maxY, t: tBottom });
+            }
+    
+            if (hits.length < 2) return;
+            hits.sort((a, b) => a.t - b.t);
+            const p1 = hits[0];
+            const p2 = hits[hits.length - 1];
+    
             ctx.beginPath();
-            ctx.moveTo(corners[0].x, corners[0].y);
-            ctx.lineTo(corners[1].x, corners[1].y);
-            ctx.lineTo(corners[2].x, corners[2].y);
-            ctx.lineTo(corners[3].x, corners[3].y);
-            ctx.closePath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
             ctx.stroke();
-            ctx.fillStyle = '#22d3ee';
-            ctx.font = '12px sans-serif';
-            ctx.fillText('HITBOX', corners[0].x + 8, corners[0].y - 8);
         }
-
-        // Khôi phục transform gốc của canvas, tránh bị cộng dồn qua các frame
-        ctx.restore();
-    }
-
-    function gameLoop(time) {
-        update(time);
-        draw();
-        requestAnimationFrame(gameLoop);
-    }
-
-    function resizeCanvas() {
-        const canvasContainer = canvas.parentElement;
-        // Lấy kích thước vùng trống (trừ dashboard)
-        const rect = canvasContainer.getBoundingClientRect();
-        canvas.width = Math.floor(rect.width);
-        canvas.height = Math.floor(rect.height);
-        calculateMapOffset();
-    }
-    window.addEventListener('resize', resizeCanvas);
-    if (carImage.complete) {
-        prepareCarImageCrop();
-    } else {
-        carImage.addEventListener('load', prepareCarImageCrop);
-    }
-    // Gọi resize khi load xong dashboard
-    window.onload = () => {
-        resizeCanvas();
-        updateGearUI();
-        requestAnimationFrame(gameLoop);
-    };
-
-</script>
-</body>
-</html>
+    
+        function updateSteeringUIState(timeMs) {
+            const isNeutral = Math.abs(car.steeringTurns) <= STEER_NEUTRAL_THRESHOLD;
+    
+            if (isNeutral && !wasInNeutralZone) {
+                // Khi vừa về thẳng lái, giữ trạng thái này thêm 1 khoảng thời gian
+                steerHoldUntilMs = timeMs + (STRAIGHT_STEER_HOLD_SEC * 1000);
+                steerUIState = 'straight';
+            } else if (isNeutral) {
+                steerUIState = 'straight';
+            } else {
+                // Chưa hết thời gian hold thì vẫn hiển thị "Thẳng lái"
+                if (timeMs >= steerHoldUntilMs) {
+                    steerUIState = car.steeringTurns < 0 ? 'left' : 'right';
+                } else {
+                    steerUIState = 'straight';
+                }
+            }
+    
+            wasInNeutralZone = isNeutral;
+        }
+    
+        let lastTime = 0;
+        function update(time) {
+            const dt = (time - lastTime) / 1000 || 0; 
+            lastTime = time;
+    
+            // Vô lăng
+            let steerDelta = GAME_CONFIG.steerSpeed * dt;
+            if (keys.A) car.steeringTurns -= steerDelta;
+            if (keys.D) car.steeringTurns += steerDelta;
+            car.steeringTurns = Math.max(-GAME_CONFIG.maxSteerTurns, Math.min(GAME_CONFIG.maxSteerTurns, car.steeringTurns));
+    
+            wheelImg.style.transform = `rotate(${car.steeringTurns * 360}deg)`;
+            updateSteeringUIState(time);
+            let turnsAbs = Math.abs(car.steeringTurns).toFixed(1);
+            if (steerUIState === 'left') {
+                steeringText.innerText = `Lái trái: ${turnsAbs}`;
+                steeringText.className = 'w-24 text-base font-bold text-red-400 text-center'; 
+            } else if (steerUIState === 'right') {
+                steeringText.innerText = `Lái phải: ${turnsAbs}`;
+                steeringText.className = 'w-24 text-base font-bold text-blue-400 text-center'; 
+            } else {
+                steeringText.innerText = `Thẳng lái`;
+                steeringText.className = 'w-24 text-base font-bold text-yellow-400 text-center'; 
+            }
+    
+            let isHittingBorder = false;
+            let isHittingYellowLine = false;
+    
+            // Vật lý di chuyển
+            if (car.isMoving && car.gear !== 0) {
+                let wheelAngleRad = (car.steeringTurns / GAME_CONFIG.maxSteerTurns) * GAME_CONFIG.maxSteerAngleRad;
+                let wheelbase = ENV.carW * 0.6; 
+                let velocity = GAME_CONFIG.moveSpeed * 60 * dt * car.gear;
+    
+                // Tính toán tọa độ và góc xoay ở frame tiếp theo (chưa gán ngay)
+                let nextX = car.x + Math.cos(car.angle) * velocity;
+                let nextY = car.y + Math.sin(car.angle) * velocity;
+                let nextAngle = car.angle + (velocity / wheelbase) * Math.tan(wheelAngleRad);
+    
+                // Sinh 4 góc xe ảo ở frame tiếp theo
+                const nextCorners = getCarCorners(nextX, nextY, nextAngle);
+                const nextEdges = [
+                    [nextCorners[0], nextCorners[1]], [nextCorners[1], nextCorners[2]],
+                    [nextCorners[2], nextCorners[3]], [nextCorners[3], nextCorners[0]]
+                ];
+    
+                // Rà soát va chạm vật lý với tường/lề ở vị trí ảo đó
+                for (let edge of nextEdges) {
+                    for (let line of borderLines) {
+                        if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
+                            isHittingBorder = true; break;
+                        }
+                    }
+                    if (isHittingBorder) break;
+                }
+    
+                // Nếu không bị cản bởi tường, mới chính thức cho phép xe di chuyển tới đó
+                if (!isHittingBorder) {
+                    car.x = nextX;
+                    car.y = nextY;
+                    car.angle = nextAngle;
+                }
+            }
+    
+            // --- Cập nhật cảnh báo dựa trên tọa độ CHÍNH THỨC của xe hiện tại ---
+            const currentCorners = getCarCorners();
+            const currentEdges = [
+                [currentCorners[0], currentCorners[1]], [currentCorners[1], currentCorners[2]],
+                [currentCorners[2], currentCorners[3]], [currentCorners[3], currentCorners[0]]
+            ];
+    
+            // 1. Kiểm tra vạch chip vàng (Bị trừ điểm)
+            for (let edge of currentEdges) {
+                for (let line of yellowLines) {
+                    if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
+                        isHittingYellowLine = true; break;
+                    }
+                }
+                if (isHittingYellowLine) break;
+            }
+    
+            // 2. Kiểm tra lại lề ở trạng thái hiện tại (Đề phòng trường hợp thay đổi kích thước xe làm xe đột ngột đè lên lề)
+            if (!isHittingBorder) { 
+                for (let edge of currentEdges) {
+                    for (let line of borderLines) {
+                        if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
+                            isHittingBorder = true; break;
+                        }
+                    }
+                    if (isHittingBorder) break;
+                }
+            }
+    
+            // 3. Cập nhật milestone và hiển thị thông báo trên màn hình
+            updateParkingMilestones(isHittingBorder, isHittingYellowLine);
+    
+            if (isHittingBorder) {
+                warningMsg.innerText = "⚠️ XE CHẠM LỀ ⚠️";
+                warningMsg.style.backgroundColor = "#991b1b"; // Đỏ sậm
+                warningMsg.style.display = 'block';
+            } else if (isHittingYellowLine) {
+                warningMsg.innerText = "⚠️ XE ĐÈ VẠCH ⚠️";
+                warningMsg.style.backgroundColor = "#ef4444"; // Đỏ tươi
+                warningMsg.style.display = 'block';
+            } else if (hasExerciseCompleted) {
+                warningMsg.innerText = "🎉 HOÀN THÀNH BÀI GHÉP XE 🎉";
+                warningMsg.style.backgroundColor = "#065f46";
+                warningMsg.style.display = 'block';
+            } else if (hasParkingSuccess) {
+                warningMsg.innerText = "✅ GHÉP XE THÀNH CÔNG ✅";
+                warningMsg.style.backgroundColor = "#15803d";
+                warningMsg.style.display = 'block';
+            } else {
+                warningMsg.style.display = 'none';
+            }
+        }
+    
+        function draw() {
+            // Nền cỏ
+            ctx.fillStyle = '#16a34a'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(mapOffsetX, mapOffsetY);
+            // -- VẼ PATH BAO QUANH BẢN ĐỒ --
+            ctx.beginPath();
+            ctx.moveTo(ENV.mapLeft, ENV.roadTop); // Bắt đầu từ góc trái trên đường ngang
+            ctx.lineTo(ENV.rightRoadLeft, ENV.roadTop); // Kéo sang phải đến lề đường dọc
+            ctx.lineTo(ENV.rightRoadLeft, ENV.rightRoadTop); // Kéo lên trên
+            ctx.lineTo(ENV.rightRoadRight, ENV.rightRoadTop); // Sang ngang đỉnh đường dọc
+            ctx.lineTo(ENV.rightRoadRight, ENV.rightRoadBottom); // Kéo thẳng xuống đáy phải
+            ctx.lineTo(ENV.rightRoadLeft, ENV.rightRoadBottom); // Sang ngang đáy ngã 3
+            ctx.lineTo(ENV.rightRoadLeft, ENV.roadBottom); // Đi ngược lên chạm đáy đường ngang
+            ctx.lineTo(ENV.spotBorderRight, ENV.roadBottom); // Đi sang trái đến lề chuồng đỗ
+            ctx.lineTo(ENV.spotBorderRight, ENV.spotBorderBottom); // Kéo xuống đáy chuồng
+            ctx.lineTo(ENV.spotBorderLeft, ENV.spotBorderBottom); // Sang ngang đáy chuồng
+            ctx.lineTo(ENV.spotBorderLeft, ENV.roadBottom); // Kéo lên miệng chuồng
+            ctx.lineTo(ENV.mapLeft, ENV.roadBottom); // Kéo về góc trái dưới đường ngang
+            ctx.closePath();
+    
+            // Fill màu đường nhựa
+            ctx.fillStyle = '#94a3b8';
+            ctx.fill();
+    
+            // Stroke Border Trắng Đỏ liên tục
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = 'white'; // Lớp nền trắng
+            ctx.setLineDash([]);
+            ctx.stroke();
+    
+            ctx.strokeStyle = '#ef4444'; // Lớp vạch đỏ đứt khúc
+            ctx.setLineDash([20, 20]);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+    
+            // -- VẼ VẠCH CHIP VÀNG (Gọn gàng bên trong chuồng) --
+            ctx.beginPath();
+            ctx.moveTo(yellowLines[0].x1, yellowLines[0].y1); ctx.lineTo(yellowLines[0].x2, yellowLines[0].y2); // Trái
+            ctx.moveTo(yellowLines[1].x1, yellowLines[1].y1); ctx.lineTo(yellowLines[1].x2, yellowLines[1].y2); // Phải
+            ctx.moveTo(yellowLines[2].x1, yellowLines[2].y1); ctx.lineTo(yellowLines[2].x2, yellowLines[2].y2); // Đáy
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+    
+            // -- VẼ CHỮ GHI CHÚ KÍCH THƯỚC --
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            
+            // Ghi chú Ed ngang
+            ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, ENV.mapLeft + (ENV.spotBorderLeft - ENV.mapLeft)/2, ENV.roadBottom + 25);
+            // Ghi chú Ed dọc (đường bên phải)
+            ctx.save();
+            ctx.translate(ENV.rightRoadLeft - 15, ENV.roadTop - 50);
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, 0, 0);
+            ctx.restore();
+    
+            // Ghi chú Ld (vạch vàng)
+            ctx.save();
+            // Đẩy chữ ra ngoài border phải để không đè lên vạch đỏ-trắng
+            ctx.translate(ENV.spotBorderRight + 15, ENV.chipTop + ENV.Ld/2);
+            ctx.rotate(Math.PI/2);
+            ctx.fillStyle = '#fde047';
+            ctx.fillText(`Ld = ${ENV.Ld_m.toFixed(2)}m`, 0, 0);
+            ctx.restore();
+            
+            // Ghi chú Rd (vạch vàng)
+            ctx.fillText(`Rd = ${ENV.Rd_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rd/2, ENV.chipBottom - 10);
+    
+            // -- VẼ Ô TÔ --
+            ctx.save();
+            ctx.translate(car.x, car.y);
+            ctx.rotate(car.angle);
+            
+            if (carImage.complete && carImage.naturalWidth > 0) {
+                prepareCarImageCrop();
+                if (carImageCrop.ready) {
+                    ctx.drawImage(
+                        carImage,
+                        carImageCrop.sx, carImageCrop.sy, carImageCrop.sw, carImageCrop.sh,
+                        -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH
+                    );
+                } else {
+                    ctx.drawImage(carImage, -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+                }
+            } else {
+                ctx.fillStyle = 'red';
+                ctx.fillRect(-ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+                ctx.fillStyle = 'yellow'; // Đầu xe
+                ctx.fillRect(ENV.carW/2 - 10, -ENV.carH/2, 10, ENV.carH);
+            }
+    
+            ctx.restore();
+    
+            // -- VẼ 2 ĐƯỜNG CĂN MỜ (bám theo xe) --
+            const mapMinX = ENV.mapLeft;
+            const mapMaxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
+            const mapMinY = Math.min(ENV.roadTop, ENV.rightRoadTop);
+            const mapMaxY = Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom);
+    
+            const steeringPos = carLocalToWorld(
+                ENV.carW * STEERING_LOCAL_RATIO.x,
+                ENV.carH * STEERING_LOCAL_RATIO.y
+            );
+            const driverSeatPos = carLocalToWorld(
+                ENV.carW * DRIVER_SEAT_LOCAL_RATIO.x,
+                ENV.carH * DRIVER_SEAT_LOCAL_RATIO.y
+            );
+    
+            ctx.save();
+            ctx.strokeStyle = 'rgba(253, 230, 138, 0.72)'; // vàng nhạt
+            ctx.lineWidth = 1;
+            ctx.setLineDash([7, 7]);
+    
+            // Đồng bộ theo góc xe: dọc theo trục thân xe, ngang vuông góc thân xe
+            const dirLongX = Math.cos(car.angle);
+            const dirLongY = Math.sin(car.angle);
+            const dirSideX = -Math.sin(car.angle);
+            const dirSideY = Math.cos(car.angle);
+    
+            // Đường căn dọc qua vị trí vô lăng
+            drawClippedGuideLine(
+                steeringPos.x, steeringPos.y,
+                dirLongX, dirLongY,
+                mapMinX, mapMinY, mapMaxX, mapMaxY
+            );
+    
+            // Đường căn ngang qua vị trí ghế lái
+            drawClippedGuideLine(
+                driverSeatPos.x, driverSeatPos.y,
+                dirSideX, dirSideY,
+                mapMinX, mapMinY, mapMaxX, mapMaxY
+            );
+    
+            ctx.setLineDash([]);
+            ctx.restore();
+    
+            if (SHOW_HITBOX_DEBUG) {
+                const corners = getCarCorners(car.x, car.y, car.angle);
+                ctx.strokeStyle = '#22d3ee';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(corners[0].x, corners[0].y);
+                ctx.lineTo(corners[1].x, corners[1].y);
+                ctx.lineTo(corners[2].x, corners[2].y);
+                ctx.lineTo(corners[3].x, corners[3].y);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.fillStyle = '#22d3ee';
+                ctx.font = '12px sans-serif';
+                ctx.fillText('HITBOX', corners[0].x + 8, corners[0].y - 8);
+            }
+    
+            // Khôi phục transform gốc của canvas, tránh bị cộng dồn qua các frame
+            ctx.restore();
+        }
+    
+        function gameLoop(time) {
+            update(time);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+    
+        function resizeCanvas() {
+            const canvasContainer = canvas.parentElement;
+            // Lấy kích thước vùng trống (trừ dashboard)
+            const rect = canvasContainer.getBoundingClientRect();
+            canvas.width = Math.floor(rect.width);
+            canvas.height = Math.floor(rect.height);
+            calculateMapOffset();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        if (carImage.complete) {
+            prepareCarImageCrop();
+        } else {
+            carImage.addEventListener('load', prepareCarImageCrop);
+        }
+        // Gọi resize khi load xong dashboard
+        window.onload = () => {
+            resizeCanvas();
+            updateGearUI();
+            requestAnimationFrame(gameLoop);
+        };
+    
+    </script>
+    </body>
+    </html>
