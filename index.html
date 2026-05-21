@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mô Phỏng Ghép Xe - Góc nhìn Lái</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #0f172a;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: crosshair;
+        }
+        .wheel-overlay-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vh;
+            height: 85vh;
+            max-width: 900px;
+            max-height: 900px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .wheel-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: var(--wheel-opacity, 0.2);
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.8));
+            will-change: transform;
+        }
+        .wheel-center-dash {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 160px;
+            height: 160px;
+            background: radial-gradient(circle, rgba(31,41,55,var(--dash-opacity,0.95)) 40%, rgba(17,24,39,calc(var(--dash-opacity,0.95)*0.7)) 100%);
+            border-radius: 50%;
+            box-shadow: inset 0 4px 10px rgba(0,0,0,0.8), 0 0 15px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid rgba(75,85,99,calc(var(--dash-opacity,0.95)*0.5));
+            backdrop-filter: blur(2px);
+            pointer-events: none;
+        }
+        .gear-text {
+            font-size: 1.75rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px currentColor;
+            transition: color 0.2s;
+        }
+        .steer-text {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-top: 8px;
+            transition: color 0.2s;
+        }
+        .floating-btn {
+            pointer-events: auto;
+            backdrop-filter: blur(8px);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .floating-btn:active {
+            transform: scale(0.95);
+        }
+        .warning-msg {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 40px;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            display: none;
+            z-index: 20;
+            color: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            animation: pulseWarning 0.6s infinite alternate;
+            white-space: nowrap;
+        }
+        @keyframes pulseWarning {
+            from { opacity: 1; transform: translateX(-50%) scale(1); }
+            to { opacity: 0.8; transform: translateX(-50%) scale(1.05); }
+        }
+        .modal-backdrop {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+        .modal-backdrop.active {
+            display: flex;
+        }
+        .modal-content {
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+        kbd {
+            background: #374151;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border-bottom: 2px solid #111827;
+            font-family: monospace;
+            color: #93c5fd;
+        }
+        @media (max-width: 768px) {
+            .wheel-overlay-container { width: 70vh; height: 70vh; }
+            .wheel-center-dash { width: 120px; height: 120px; }
+            .gear-text { font-size: 1.2rem; }
+            .steer-text { font-size: 0.8rem; }
+            .warning-msg { font-size: 1rem; padding: 8px 20px; white-space: nowrap; }
+        }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<!-- Vô lăng overlay -->
+<div class="wheel-overlay-container">
+    <img id="wheelImg" src="images/steering_wheel.png" class="wheel-image" alt="Vô lăng" onerror="this.src='data:image/svg+xml,%3Csvg...%3E'">
+    <div class="wheel-center-dash">
+        <div id="gearDisplay" class="gear-text text-red-500">TIẾN</div>
+        <div id="steerDisplay" class="steer-text text-yellow-400">Thẳng lái</div>
+    </div>
+</div>
+
+<!-- Cảnh báo -->
+<div id="warningMsg" class="warning-msg">⚠️ XE ĐÈ VẠCH ⚠️</div>
+
+<!-- Nút nổi -->
+<div class="absolute top-4 left-4 z-20 flex gap-3">
+    <button id="btnMenu" class="floating-btn bg-gray-800/80 hover:bg-gray-700 text-white p-3 rounded-xl border border-gray-600 shadow-lg flex items-center gap-2">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        <span class="font-bold">MENU</span>
+    </button>
+</div>
+<div class="absolute top-4 right-4 z-20">
+    <button id="btnReset" class="floating-btn bg-red-600/90 hover:bg-red-500 text-white px-5 py-3 rounded-xl shadow-lg border border-red-400 font-bold tracking-wider">
+        RESET XE
+    </button>
+</div>
+
+<!-- MODAL MENU -->
+<div id="modalMenu" class="modal-backdrop">
+    <div class="modal-content flex flex-col">
+        <div class="bg-gray-800 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-white">Menu Tuỳ Chọn</h2>
+            <button class="btnCloseModal text-gray-400 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div class="p-6 flex flex-col gap-4">
+            <div class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-1">Chọn Bài Thi</div>
+            <button id="btnModeDoc" class="w-full py-3 rounded-lg font-bold text-lg border-2 border-transparent bg-gray-700 text-white hover:bg-gray-600 transition">Ghép Xe Dọc (Lùi Chuồng)</button>
+            <button id="btnModeNgang" class="w-full py-3 rounded-lg font-bold text-lg border-2 border-transparent bg-gray-700 text-white hover:bg-gray-600 transition">Ghép Xe Ngang (Đỗ Song Song)</button>
+            <hr class="border-gray-700 my-2">
+            <button id="openConfigBtn" class="w-full py-3 rounded-lg font-bold bg-blue-600/80 hover:bg-blue-500 text-white transition">Cấu Hình Thông Số</button>
+            <button id="openGuideBtn" class="w-full py-3 rounded-lg font-bold bg-emerald-600/80 hover:bg-emerald-500 text-white transition">Hướng Dẫn Điều Khiển</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CẤU HÌNH -->
+<div id="modalConfig" class="modal-backdrop">
+    <div class="modal-content flex flex-col">
+        <div class="bg-gray-800 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-white">Cấu Hình Hệ Thống</h2>
+            <button class="btnBackToMenu text-gray-400 hover:text-white">&larr; Quay lại</button>
+        </div>
+        <div class="p-6 space-y-6">
+            <div class="space-y-3">
+                <h3 class="text-green-400 font-bold border-b border-gray-700 pb-1">Kích Thước Xe (m)</h3>
+                <div class="flex items-center justify-between">
+                    <label class="text-gray-300">Chiều dài (a):</label>
+                    <input type="number" id="cfgCarA" class="w-20 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-center" min="3.2" max="6.0" step="0.1" value="4.0">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label class="text-gray-300">Chiều rộng (b):</label>
+                    <input type="number" id="cfgCarB" class="w-20 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-center" min="1.4" max="2.5" step="0.1" value="2.0">
+                </div>
+            </div>
+            <div class="space-y-3">
+                <h3 class="text-blue-400 font-bold border-b border-gray-700 pb-1">Vận Hành</h3>
+                <div>
+                    <label class="text-gray-300 flex justify-between mb-1">Tốc độ chạy: <span id="valMove">1.5</span></label>
+                    <input type="range" id="cfgMoveSpeed" class="w-full" min="0.5" max="3.0" step="0.1" value="1.5">
+                </div>
+                <div>
+                    <label class="text-gray-300 flex justify-between mb-1">Tốc độ đánh lái: <span id="valSteer">2.0</span></label>
+                    <input type="range" id="cfgSteerSpeed" class="w-full" min="0.5" max="4.0" step="0.1" value="2.0">
+                </div>
+            </div>
+            <div class="space-y-3">
+                <h3 class="text-purple-400 font-bold border-b border-gray-700 pb-1">Hiệu Ứng Hiển Thị</h3>
+                <div>
+                    <label class="text-gray-300 flex justify-between mb-1">Độ mờ vô lăng: <span id="opacityVal">0.20</span></label>
+                    <input type="range" id="cfgOpacity" class="w-full" min="0.05" max="0.5" step="0.01" value="0.2">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label class="text-gray-300">Hiển thị kích thước (Ld,Rd,Ed...)</label>
+                    <input type="checkbox" id="cfgShowDimensions" checked>
+                </div>
+            </div>
+            <button class="btnCloseModal w-full py-3 mt-2 rounded-lg font-bold bg-gray-700 hover:bg-gray-600 text-white">Xong</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL HƯỚNG DẪN -->
+<div id="modalGuide" class="modal-backdrop">
+    <div class="modal-content flex flex-col">
+        <div class="bg-gray-800 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+            <h2 class="text-xl font-bold text-white">Hướng Dẫn Lái</h2>
+            <button class="btnBackToMenu text-gray-400 hover:text-white">&larr; Quay lại</button>
+        </div>
+        <div class="p-6 text-gray-300 space-y-4 leading-relaxed">
+            <p><kbd>A</kbd> / <kbd>D</kbd> : Nhấn giữ để quay vô lăng Trái / Phải.</p>
+            <p><kbd>Cuộn Chuột ↑</kbd> : Vào số <b>TIẾN</b>.</p>
+            <p><kbd>Cuộn Chuột ↓</kbd> : Vào số <b>LÙI</b>.</p>
+            <p><kbd>Giữ Chuột Trái</kbd> : Đạp chân ga (Xe di chuyển). Nhả chuột để phanh.</p>
+            <div class="bg-gray-900/50 p-3 rounded text-sm border border-gray-700">
+                * Lưu ý: Kết hợp vừa nhấn giữ ga vừa đánh lái. Nhìn vào tâm vô lăng để biết góc lái và số hiện tại.
+            </div>
+            <button class="btnCloseModal w-full py-3 mt-2 rounded-lg font-bold bg-gray-700 hover:bg-gray-600 text-white">Đã Hiểu</button>
+        </div>
+    </div>
+</div>
+
+<img id="carImg" src="images/car.png" style="display: none;" onerror="this.src='data:image/svg+xml,...'">
+
+<script>
+    // DOM elements
+    const dom = {
+        canvas: document.getElementById('gameCanvas'),
+        wheelImg: document.getElementById('wheelImg'),
+        gearDisplay: document.getElementById('gearDisplay'),
+        steerDisplay: document.getElementById('steerDisplay'),
+        warningMsg: document.getElementById('warningMsg'),
+        btnReset: document.getElementById('btnReset'),
+        btnMenu: document.getElementById('btnMenu'),
+        btnModeDoc: document.getElementById('btnModeDoc'),
+        btnModeNgang: document.getElementById('btnModeNgang'),
+        openConfigBtn: document.getElementById('openConfigBtn'),
+        openGuideBtn: document.getElementById('openGuideBtn'),
+        cfgCarA: document.getElementById('cfgCarA'),
+        cfgCarB: document.getElementById('cfgCarB'),
+        cfgMoveSpeed: document.getElementById('cfgMoveSpeed'),
+        cfgSteerSpeed: document.getElementById('cfgSteerSpeed'),
+        cfgOpacity: document.getElementById('cfgOpacity'),
+        cfgShowDimensions: document.getElementById('cfgShowDimensions'),
+        valMove: document.getElementById('valMove'),
+        valSteer: document.getElementById('valSteer'),
+        opacityVal: document.getElementById('opacityVal'),
+        carImg: document.getElementById('carImg')
+    };
+
+    // Modal management
+    const modals = ['modalMenu', 'modalConfig', 'modalGuide'];
+    let isModalOpen = false;
+
+    function openModal(id) {
+        modals.forEach(m => document.getElementById(m).classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        isModalOpen = true;
+    }
+    function closeModal() {
+        modals.forEach(m => document.getElementById(m).classList.remove('active'));
+        isModalOpen = false;
+    }
+    document.querySelectorAll('.btnCloseModal').forEach(btn => btn.addEventListener('click', closeModal));
+    document.querySelectorAll('.btnBackToMenu').forEach(btn => btn.addEventListener('click', () => openModal('modalMenu')));
+    dom.btnMenu.addEventListener('click', () => openModal('modalMenu'));
+    dom.openConfigBtn.addEventListener('click', () => openModal('modalConfig'));
+    dom.openGuideBtn.addEventListener('click', () => openModal('modalGuide'));
+
+    // Update config labels
+    dom.cfgMoveSpeed.addEventListener('input', (e) => { dom.valMove.innerText = e.target.value; });
+    dom.cfgSteerSpeed.addEventListener('input', (e) => { dom.valSteer.innerText = e.target.value; });
+    dom.valMove.innerText = dom.cfgMoveSpeed.value;
+    dom.valSteer.innerText = dom.cfgSteerSpeed.value;
+
+    // Opacity control (CSS variables)
+    function applyOpacity(val) {
+        document.documentElement.style.setProperty('--wheel-opacity', val);
+        document.documentElement.style.setProperty('--dash-opacity', val);
+    }
+    let currentOpacity = parseFloat(dom.cfgOpacity.value);
+    applyOpacity(currentOpacity);
+    dom.opacityVal.innerText = currentOpacity.toFixed(2);
+    dom.cfgOpacity.addEventListener('input', (e) => {
+        const val = e.target.value;
+        dom.opacityVal.innerText = val;
+        currentOpacity = parseFloat(val);
+        applyOpacity(currentOpacity);
+    });
+
+    // Show/hide dimensions
+    let showDimensions = dom.cfgShowDimensions.checked;
+    dom.cfgShowDimensions.addEventListener('change', (e) => {
+        showDimensions = e.target.checked;
+        if (activeMode) loadMode(activeMode); // reload to apply
+    });
+
+    // Load mode (doc/ngang)
+    let activeCleanup = null;
+    let activeMode = null;
+
+    async function loadMode(mode) {
+        if (activeCleanup) {
+            activeCleanup();
+            activeCleanup = null;
+        }
+        // Update UI buttons
+        dom.btnModeDoc.style.borderColor = mode === 'doc' ? '#3b82f6' : 'transparent';
+        dom.btnModeNgang.style.borderColor = mode === 'ngang' ? '#3b82f6' : 'transparent';
+        activeMode = mode;
+
+        // Dynamically load mode script
+        const scriptSrc = mode === 'doc' ? 'js/ghep-doc.js' : 'js/ghep-ngang.js';
+        const oldScript = document.querySelector(`script[data-mode="${mode}"]`);
+        if (oldScript) oldScript.remove();
+        const script = document.createElement('script');
+        script.src = scriptSrc;
+        script.setAttribute('data-mode', mode);
+        script.onload = () => {
+            if (mode === 'doc' && typeof initGhepDoc === 'function') {
+                activeCleanup = initGhepDoc(dom, {
+                    showDimensions: showDimensions,
+                    wheelOpacity: currentOpacity,
+                    dashOpacity: currentOpacity
+                });
+            } else if (mode === 'ngang' && typeof initGhepNgang === 'function') {
+                activeCleanup = initGhepNgang(dom, {
+                    showDimensions: showDimensions,
+                    wheelOpacity: currentOpacity,
+                    dashOpacity: currentOpacity
+                });
+            }
+        };
+        document.body.appendChild(script);
+    }
+
+    // Event listeners for mode buttons
+    dom.btnModeDoc.addEventListener('click', () => loadMode('doc'));
+    dom.btnModeNgang.addEventListener('click', () => loadMode('ngang'));
+    dom.btnReset.addEventListener('click', () => { if (activeMode) loadMode(activeMode); });
+
+    // Initial load
+    loadMode('doc');
+</script>
+</body>
+</html>

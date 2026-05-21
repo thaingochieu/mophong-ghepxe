@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mô phỏng ghép xe - Dọc & Ngang</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/ghep-doc.css" id="mode-specific-css">
+    <style>
+        /* Dashboard style chỉ dùng cho index */
+        .dashboard {
+            background-color: #f8fafc;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2);
+        }
+        .wheel-container {
+            /*background: #e2e8f0;*/
+            /*border-radius: 50%;*/
+            /*padding: 1px;*/
+            /*box-shadow: inset 0 0 0 2px #cbd5e1, 0 8px 20px rgba(0,0,0,0.2);*/
+        }
+        .wheel {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.05s linear;
+        }
+        .gear {
+            background: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            text-align: center;
+            transition: all 0.1s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            color: #1e293b;
+            border: 1px solid #cbd5e1;
+        }
+        .active-forward {
+            background: #15803d;
+            color: white;
+            border-color: #166534;
+        }
+        .active-reverse {
+            background: #b91c1c;
+            color: white;
+            border-color: #991b1b;
+        }
+        button.gear {
+            background: #ef4444;
+            border: none;
+            cursor: pointer;
+            color: white;
+        }
+        button.gear:hover {
+            background: #dc2626;
+            transform: scale(0.96);
+        }
+        .kbd {
+            background: #334155;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.7rem;
+            display: inline-block;
+            color: #f1f5f9;
+        }
+        .mode-link {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 40px;
+            background: #f1f5f9;
+            text-align: center;
+            transition: all 0.2s;
+            border: 1px solid #cbd5e1;
+            color: #1e293b;
+        }
+        .mode-link.active {
+            background: #2563eb;
+            color: white;
+            border-color: #3b82f6;
+            box-shadow: 0 0 8px #3b82f6;
+        }
+        .mode-link:hover {
+            background: #e2e8f0;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: #0f172a;
+        }
+        .canvas-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        input[type="range"] {
+            height: 4px;
+            -webkit-appearance: none;
+            background: #cbd5e1;
+            border-radius: 5px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+        }
+        .number-input {
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+        }
+        body {
+            margin: 0;
+            background-color: #1a202c;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<div class="flex flex-row h-screen w-screen overflow-hidden">
+    <!-- DASHBOARD -->
+    <div class="dashboard w-80 flex-shrink-0 flex flex-col justify-between py-5 px-4 gap-5 m-4 shadow-xl rounded-2xl bg-stone-50">
+        <div class="flex flex-col items-center gap-4 bg-yellow-100 p-5 rounded-2xl border-4 border-gray-600 shadow-lg mx-0">
+            <div class="flex flex-col items-center gap-1.5">
+                <div class="wheel-container" style="width:120px;height:120px;">
+                    <img id="wheelImg" src="images/steering_wheel.png" class="wheel" alt="Vô lăng" onerror="this.src='data:image/svg+xml,%3Csvg...%3E'">
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="gearForward" class="gear active-forward">TIẾN</div>
+                    <div id="gearReverse" class="gear">LÙI</div>
+                    <button id="btnReset" class="gear bg-red-600 hover:bg-red-500 text-white border-red-500 cursor-pointer ml-1">RESET</button>
+                </div>
+            </div>
+            <div id="steeringText" class="w-24 text-base font-bold text-yellow-600 text-center">Thẳng lái</div>
+        </div>
+
+        <div class="flex flex-col gap-6 bg-gray-800 p-4 rounded-lg border border-gray-600 mx-0">
+            <div class="flex flex-col gap-5">
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs text-gray-300 flex justify-between">Tốc độ: <span id="valMove">0.5</span></label>
+                    <input type="range" id="cfgMoveSpeed" class="w-full" min="0.5" max="3" step="0.1" value="0.5">
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label class="text-xs text-gray-300 flex justify-between">Quay lái: <span id="valSteer">1.0</span></label>
+                    <input type="range" id="cfgSteerSpeed" class="w-full" min="0.5" max="4" step="0.1" value="1.0">
+                </div>
+            </div>
+            <div class="flex flex-col gap-2 justify-center">
+                <div class="flex justify-between items-center gap-2">
+                    <label class="text-xs text-green-300">Dài xe (a):</label>
+                    <div class="flex items-center">
+                        <input type="number" id="cfgCarA" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600" min="3.2" max="6.0" step="0.1" value="4.0">
+                        <span class="ml-1 text-xs text-gray-400">m</span>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center gap-2">
+                    <label class="text-xs text-green-300">Rộng xe (b):</label>
+                    <div class="flex items-center">
+                        <input type="number" id="cfgCarB" class="w-16 h-6 bg-gray-700 text-white rounded px-1.5 text-sm border border-gray-600" min="1.4" max="2.5" step="0.1" value="2.0">
+                        <span class="ml-1 text-xs text-gray-400">m</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 p-3 rounded-lg border border-gray-600 text-[13px] text-gray-300 leading-relaxed mx-0">
+            <span class="kbd">A</span> / <span class="kbd">D</span> : Quay vô lăng trái/phải <br>
+            <span class="kbd">Cuộn chuột lên-xuống</span> : Sang số Tiến/Lùi <br>
+            <span class="kbd">Giữ chuột trái</span> : Đạp ga (Di chuyển)
+        </div>
+
+        <div class="flex gap-2 mt-2">
+            <a href="#doc" id="link-doc" class="mode-link flex-1 text-center">GHÉP DỌC</a>
+            <a href="#ngang" id="link-ngang" class="mode-link flex-1 text-center">GHÉP NGANG</a>
+        </div>
+
+        <div class="mt-4 pt-2 border-t border-gray-300 text-center">
+            <a href="mobile.html" class="text-sm text-blue-600 hover:text-blue-800 font-medium">📱 Chuyển sang giao diện Mobile</a>
+        </div>
+<!--        <div class="text-center text-[10px] text-slate-500 mt-1">Tỉ lệ 1m = 45px</div>-->
+    </div>
+
+    <!-- Khu vực render game -->
+    <div id="gameRoot" class="flex-1 relative bg-gray-950 overflow-hidden canvas-container"></div>
+</div>
+
+<!-- Ảnh xe dùng chung -->
+<img id="carImg" src="images/car.png" style="display: none;" onerror="this.onerror=null; this.src='data:image/svg+xml,...'">
+
+<script src="js/common.js"></script>
+<script>
+    // DOM elements
+    const dom = {
+        wheelImg: document.getElementById('wheelImg'),
+        steeringText: document.getElementById('steeringText'),
+        gearForward: document.getElementById('gearForward'),
+        gearReverse: document.getElementById('gearReverse'),
+        btnReset: document.getElementById('btnReset'),
+        cfgCarA: document.getElementById('cfgCarA'),
+        cfgCarB: document.getElementById('cfgCarB'),
+        cfgMoveSpeed: document.getElementById('cfgMoveSpeed'),
+        cfgSteerSpeed: document.getElementById('cfgSteerSpeed'),
+        valMove: document.getElementById('valMove'),
+        valSteer: document.getElementById('valSteer'),
+        carImg: document.getElementById('carImg')
+    };
+
+    // Cập nhật label khi kéo slider
+    dom.cfgMoveSpeed.addEventListener('input', (e) => {
+        dom.valMove.innerText = e.target.value;
+    });
+    dom.cfgSteerSpeed.addEventListener('input', (e) => {
+        dom.valSteer.innerText = e.target.value;
+    });
+    // Khởi tạo label hiển thị đúng giá trị ban đầu
+    dom.valMove.innerText = dom.cfgMoveSpeed.value;
+    dom.valSteer.innerText = dom.cfgSteerSpeed.value;
+
+    let activeCleanup = null;
+    let activeMode = null;
+
+    // Hàm tải script động và khởi tạo mode
+    async function loadMode(mode) {
+        if (activeCleanup) {
+            activeCleanup();
+            activeCleanup = null;
+        }
+        // Xóa canvas cũ
+        const container = document.getElementById('gameRoot');
+        container.innerHTML = '';
+
+        // Cập nhật active class cho nút
+        document.getElementById('link-doc').classList.toggle('active', mode === 'doc');
+        document.getElementById('link-ngang').classList.toggle('active', mode === 'ngang');
+
+        // Tải CSS mode (nếu có)
+        const cssLink = document.getElementById('mode-specific-css');
+        if (mode === 'doc') cssLink.href = 'css/ghep-doc.css';
+        else cssLink.href = 'css/ghep-ngang.css';
+
+        // Tải và thực thi script mode
+        const scriptSrc = mode === 'doc' ? 'js/ghep-doc.js' : 'js/ghep-ngang.js';
+        // Xóa script cũ nếu có (chỉ để tránh trùng lặp, nhưng sẽ load lại)
+        const oldScript = document.querySelector(`script[data-mode="${mode}"]`);
+        if (oldScript) oldScript.remove();
+
+        const script = document.createElement('script');
+        script.src = scriptSrc;
+        script.setAttribute('data-mode', mode);
+        script.onload = () => {
+            if (mode === 'doc' && typeof initGhepDoc === 'function') {
+                activeCleanup = initGhepDoc(container, dom);
+            } else if (mode === 'ngang' && typeof initGhepNgang === 'function') {
+                activeCleanup = initGhepNgang(container, dom);
+            }
+        };
+        document.body.appendChild(script);
+    }
+
+    window.addEventListener('hashchange', () => {
+        const mode = location.hash === '#ngang' ? 'ngang' : 'doc';
+        loadMode(mode);
+    });
+
+    // Khởi tạo lần đầu
+    if (!location.hash || location.hash === '#doc') loadMode('doc');
+    else loadMode('ngang');
+</script>
+</body>
+</html>
