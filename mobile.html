@@ -220,12 +220,13 @@
 
 <!-- Thanh công cụ trên cùng - bên trái -->
 <div class="top-bar">
+    <a href="index.html" class="top-btn" style="background:#1e293bcc; text-decoration:none;">Giao diện PC</a>
     <button id="configBtn" class="top-btn">⚙️ Cấu hình</button>
     <div class="mode-buttons">
         <button id="modeDocBtn" class="mode-btn active">Ghép dọc</button>
         <button id="modeNgangBtn" class="mode-btn">Ghép ngang</button>
     </div>
-    <a href="index.html" class="top-btn" style="background:#1e293bcc; text-decoration:none;">Giao diện PC</a>
+    <button id="resetBtnMobile" class="top-btn" style="background:#dc2626cc;">⟳ Reset</button>
 </div>
 
 <!-- Nút điều khiển ảo -->
@@ -527,7 +528,7 @@
         }
 
         function draw() {
-            ctx.fillStyle = '#16a34a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.fillStyle = '#111827'; ctx.fillRect(0,0,canvas.width,canvas.height);
             ctx.save(); ctx.translate(mapOffsetX, mapOffsetY);
             // Vẽ đường dựa theo mode
             ctx.beginPath();

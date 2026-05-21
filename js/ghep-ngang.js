@@ -1,5 +1,5 @@
 // Ghép xe ngang
-function initGhepNgang(container, sharedDom) {
+function initGhepNgang(sharedDom, options = {}) {
     const SCALE = 45;
     const COLLISION_FRONT_SCALE = 0.80;
     const COLLISION_REAR_SCALE = 0.72;
@@ -7,6 +7,30 @@ function initGhepNgang(container, sharedDom) {
     const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 };
     const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 };
 
+    // ===== CẤU HÌNH HIỂN THỊ =====
+    let showDimensions = options.showDimensions !== undefined ? options.showDimensions : true;
+    let wheelOpacity = options.wheelOpacity !== undefined ? options.wheelOpacity : 0.2;
+    let dashOpacity = options.dashOpacity !== undefined ? options.dashOpacity : 0.95;
+    window._currentGameModule = {
+        showDimensions,
+        setShowDimensions: (val) => { 
+            // ...existing code...
+            showDimensions = val; 
+            draw();
+        },
+        setWheelOpacity: (val) => { wheelOpacity = val; document.documentElement.style.setProperty('--wheel-opacity', val); },
+        setDashOpacity: (val) => { dashOpacity = val; document.documentElement.style.setProperty('--dash-opacity', val); }
+    };
+    // ...existing code...
+    document.documentElement.style.setProperty('--wheel-opacity', wheelOpacity);
+    document.documentElement.style.setProperty('--dash-opacity', dashOpacity);
+
+    // Sử dụng canvas có sẵn từ DOM
+    const canvas = sharedDom.canvas;
+    const ctx = canvas.getContext('2d');
+    const warningDiv = sharedDom.warningMsg;
+    const carImage = sharedDom.carImg;
+    
     let ENV = {}, yellowLines = [], borderLines = [];
     let mapOffsetX = 0, mapOffsetY = 0;
     let CAR_A = parseFloat(sharedDom.cfgCarA.value);
@@ -30,19 +54,7 @@ function initGhepNgang(container, sharedDom) {
     let steerUIState = 'straight', steerHoldUntilMs = 0, wasInNeutralZone = true;
     let hasParkingSuccess = false, hasExerciseCompleted = false;
     let lastTime = 0, animationId = null;
-
-    const warningDiv = document.createElement('div');
-    warningDiv.className = 'warning-overlay';
-    warningDiv.style.backgroundColor = '#ef4444';
-    warningDiv.innerText = '⚠️ XE ĐÈ VẠCH ⚠️';
-    container.appendChild(warningDiv);
-    const canvas = document.createElement('canvas');
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    container.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
-
-    const carImage = sharedDom.carImg;
+    
     const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
 
     function calculateEnvironment() {
@@ -97,8 +109,9 @@ function initGhepNgang(container, sharedDom) {
     }
 
     function updateGearUI() {
-        sharedDom.gearForward.className = 'gear ' + (car.gear === 1 ? 'active-forward' : '');
-        sharedDom.gearReverse.className = 'gear ' + (car.gear === -1 ? 'active-reverse' : '');
+        // Cập nhật hiển thị số trên bảng điều khiển trung tâm
+        if (car.gear === 1) sharedDom.gearDisplay.innerText = "TIẾN";
+        else sharedDom.gearDisplay.innerText = "LÙI";
     }
 
     function getCarCorners(cx = car.x, cy = car.y, ca = car.angle) {
@@ -132,8 +145,10 @@ function initGhepNgang(container, sharedDom) {
         if (isNeutral && !wasInNeutralZone) steerHoldUntilMs = nowMs + 100;
         steerUIState = (isNeutral || nowMs < steerHoldUntilMs) ? 'straight' : (car.steeringTurns < 0 ? 'left' : 'right');
         wasInNeutralZone = isNeutral;
-        const absTurn = Math.abs(car.steeringTurns).toFixed(1);
-        sharedDom.steeringText.innerText = steerUIState === 'left' ? `Lái trái: ${absTurn}` : (steerUIState === 'right' ? `Lái phải: ${absTurn}` : 'Thẳng lái');
+        const turnsAbs = Math.abs(car.steeringTurns).toFixed(2);
+        if (steerUIState === 'left') sharedDom.steerDisplay.innerText = `Lái trái: ${turnsAbs}`;
+        else if (steerUIState === 'right') sharedDom.steerDisplay.innerText = `Lái phải: ${turnsAbs}`;
+        else sharedDom.steerDisplay.innerText = `Thẳng lái: 0.00`;
         sharedDom.wheelImg.style.transform = `rotate(${car.steeringTurns * 360}deg)`;
     }
 
@@ -164,7 +179,7 @@ function initGhepNgang(container, sharedDom) {
     }
 
     function draw() {
-        ctx.fillStyle = '#16a34a';
+        ctx.fillStyle = '#111827'; // màu xanh cỏ
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.save();
         ctx.translate(mapOffsetX, mapOffsetY);
@@ -185,9 +200,12 @@ function initGhepNgang(container, sharedDom) {
         ctx.beginPath();
         yellowLines.forEach(l => { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); });
         ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.stroke();
-        ctx.fillStyle = '#fde047'; ctx.font = 'bold 12px monospace';
-        ctx.fillText(`Lg = ${ENV.Lg_m.toFixed(2)}m`, ENV.borderRight + 12, ENV.chipTop + ENV.Lg / 2);
-        ctx.fillText(`Rg = ${ENV.Rg_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rg / 2, ENV.borderBottom + 20);
+        if (showDimensions) {
+            // ...existing code...
+            ctx.fillStyle = '#fde047'; ctx.font = 'bold 12px monospace';
+            ctx.fillText(`Lg = ${ENV.Lg_m.toFixed(2)}m`, ENV.borderRight + 12, ENV.chipTop + ENV.Lg / 2);
+            ctx.fillText(`Rg = ${ENV.Rg_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rg / 2, ENV.borderBottom + 20);
+        }
         ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.angle);
         if (carImage.complete && carImage.naturalWidth) {
             prepareCarImageCrop();
@@ -204,20 +222,8 @@ function initGhepNgang(container, sharedDom) {
         const mapMaxX = ENV.borderRight;
         const mapMinY = ENV.mapTop;
         const mapMaxY = ENV.mapBottom;
-        const steeringPos = (() => {
-            const cos = Math.cos(car.angle), sin = Math.sin(car.angle);
-            return {
-                x: car.x + (ENV.carW * STEERING_LOCAL_RATIO.x) * cos - (ENV.carH * STEERING_LOCAL_RATIO.y) * sin,
-                y: car.y + (ENV.carW * STEERING_LOCAL_RATIO.x) * sin + (ENV.carH * STEERING_LOCAL_RATIO.y) * cos
-            };
-        })();
-        const driverPos = (() => {
-            const cos = Math.cos(car.angle), sin = Math.sin(car.angle);
-            return {
-                x: car.x + (ENV.carW * DRIVER_SEAT_LOCAL_RATIO.x) * cos - (ENV.carH * DRIVER_SEAT_LOCAL_RATIO.y) * sin,
-                y: car.y + (ENV.carW * DRIVER_SEAT_LOCAL_RATIO.x) * sin + (ENV.carH * DRIVER_SEAT_LOCAL_RATIO.y) * cos
-            };
-        })();
+        // Sử dụng hàm carLocalToWorld để tránh trùng lặp
+        const steeringPos = carLocalToWorld(ENV.carW * STEERING_LOCAL_RATIO.x, ENV.carH * STEERING_LOCAL_RATIO.y);
         const dirLong = { x: Math.cos(car.angle), y: Math.sin(car.angle) };
         const dirSide = { x: -Math.sin(car.angle), y: Math.cos(car.angle) };
         ctx.save();
@@ -285,12 +291,18 @@ function initGhepNgang(container, sharedDom) {
     }
 
     function resizeAndOffset() {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        // ------------------------- ĐIỀU CHỈNH KÍCH THƯỚC MAP -------------------------
+        // Muốn thay đổi cách căn chỉnh map, sửa các dòng dưới đây:
         const minX = ENV.roadLeft, maxX = ENV.borderRight;
         const minY = ENV.mapTop, maxY = ENV.mapBottom;
-        mapOffsetX = (canvas.width - (maxX - minX)) / 2 - minX;
+        const mapW = maxX - minX, mapH = maxY - minY;
+        // Căn giữa chiều ngang
+        mapOffsetX = (canvas.width - mapW) / 2 - minX;
+        // Căn giữa chiều dọc (có thể thay đổi để stretch)
         mapOffsetY = (canvas.height - (maxY - minY)) / 2 - minY;
+        // ----------------------------------------------------------------------------
     }
 
     function loop(ts) {
@@ -310,7 +322,7 @@ function initGhepNgang(container, sharedDom) {
     function setupEvents() {
         const keydown = (e) => { if (e.target.tagName !== 'INPUT') { if (e.key === 'a') keys.A = true; if (e.key === 'd') keys.D = true; } };
         const keyup = (e) => { if (e.key === 'a') keys.A = false; if (e.key === 'd') keys.D = false; };
-        const wheel = (e) => { if (!e.target.closest('.dashboard')) { car.gear = e.deltaY < 0 ? 1 : -1; updateGearUI(); e.preventDefault(); } };
+        const wheel = (e) => { if (!e.target.closest('.modal-backdrop')) { car.gear = e.deltaY < 0 ? 1 : -1; updateGearUI(); e.preventDefault(); } };
         const mousedown = () => { car.isMoving = true; };
         const mouseup = () => { car.isMoving = false; };
         const mouseleaveCanvas = () => { car.isMoving = false; };
@@ -346,6 +358,5 @@ function initGhepNgang(container, sharedDom) {
         if (animationId) cancelAnimationFrame(animationId);
         window.removeEventListener('resize', resizeAndOffset);
         removeEvents();
-        container.innerHTML = '';
     };
 }

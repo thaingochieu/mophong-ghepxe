@@ -1,5 +1,5 @@
 // Ghép xe dọc
-function initGhepDoc(container, sharedDom) {
+function initGhepDoc(sharedDom, options = {}) {
     const SCALE = 45;
     const PARKING_CLEARANCE_LENGTH_M = 0.6;
     const PARKING_CLEARANCE_WIDTH_M = 0.6;
@@ -8,6 +8,43 @@ function initGhepDoc(container, sharedDom) {
     const COLLISION_SIDE_SCALE = 0.72;
     const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 };
     const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 };
+
+    // ===== CẤU HÌNH HIỂN THỊ =====
+    let showDimensions = options.showDimensions !== undefined ? options.showDimensions : true;
+    let wheelOpacity = options.wheelOpacity !== undefined ? options.wheelOpacity : 0.2;
+    let dashOpacity = options.dashOpacity !== undefined ? options.dashOpacity : 0.95;
+    // Lưu để module có thể cập nhật từ index.html
+    window._currentGameModule = {
+        showDimensions,
+        setShowDimensions: (val) => { 
+            // ...existing code...
+            showDimensions = val; 
+            // Vẽ lại ngay để cập nhật text
+            draw();
+        },
+        setWheelOpacity: (val) => { wheelOpacity = val; document.documentElement.style.setProperty('--wheel-opacity', val); },
+        setDashOpacity: (val) => { dashOpacity = val; document.documentElement.style.setProperty('--dash-opacity', val); }
+    };
+    // ...existing code...
+    // Áp dụng opacity ban đầu
+    document.documentElement.style.setProperty('--wheel-opacity', wheelOpacity);
+    document.documentElement.style.setProperty('--dash-opacity', dashOpacity);
+
+    // Sử dụng canvas có sẵn từ DOM
+    const canvas = sharedDom.canvas;
+    const ctx = canvas.getContext('2d');
+    const warningDiv = sharedDom.warningMsg;
+    const carImage = sharedDom.carImg;
+
+    // Đảm bảo có thể dùng hàm từ common.js (dự phòng)
+    const linesIntersect = window.linesIntersect || function(a,b,c,d,p,q,r,s) {
+        const det = (c - a) * (s - q) - (r - p) * (d - b);
+        if (det === 0) return false;
+        const lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+        const gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+        return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+    };
+    const drawClippedGuideLine = window.drawClippedGuideLine || function(ctx, px, py, dx, dy, minX, minY, maxX, maxY) { /* fallback */ };
 
     let ENV = {}, yellowLines = [], borderLines = [];
     let mapOffsetX = 0, mapOffsetY = 0;
@@ -33,19 +70,6 @@ function initGhepDoc(container, sharedDom) {
     let hasParkingSuccess = false, hasExerciseCompleted = false;
     let lastTime = 0, animationId = null;
 
-    // Tạo canvas và warning overlay
-    const warningDiv = document.createElement('div');
-    warningDiv.className = 'warning-overlay';
-    warningDiv.style.backgroundColor = '#ef4444';
-    warningDiv.innerText = '⚠️ XE ĐÈ VẠCH ⚠️';
-    container.appendChild(warningDiv);
-    const canvas = document.createElement('canvas');
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    container.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
-
-    const carImage = sharedDom.carImg;
     const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
 
     function calculateEnvironment() {
@@ -110,8 +134,9 @@ function initGhepDoc(container, sharedDom) {
     }
 
     function updateGearUI() {
-        sharedDom.gearForward.className = 'gear ' + (car.gear === 1 ? 'active-forward' : '');
-        sharedDom.gearReverse.className = 'gear ' + (car.gear === -1 ? 'active-reverse' : '');
+        // Cập nhật hiển thị số trên bảng điều khiển trung tâm
+        if (car.gear === 1) sharedDom.gearDisplay.innerText = "TIẾN";
+        else sharedDom.gearDisplay.innerText = "LÙI";
     }
 
     function getCarCorners(cx = car.x, cy = car.y, cangle = car.angle) {
@@ -169,10 +194,10 @@ function initGhepDoc(container, sharedDom) {
         else if (isNeutral) steerUIState = 'straight';
         else steerUIState = (nowMs >= steerHoldUntilMs) ? (car.steeringTurns < 0 ? 'left' : 'right') : 'straight';
         wasInNeutralZone = isNeutral;
-        const turnsAbs = Math.abs(car.steeringTurns).toFixed(1);
-        if (steerUIState === 'left') sharedDom.steeringText.innerText = `Lái trái: ${turnsAbs}`;
-        else if (steerUIState === 'right') sharedDom.steeringText.innerText = `Lái phải: ${turnsAbs}`;
-        else sharedDom.steeringText.innerText = `Thẳng lái`;
+        const turnsAbs = Math.abs(car.steeringTurns).toFixed(2);
+        if (steerUIState === 'left') sharedDom.steerDisplay.innerText = `Lái trái: ${turnsAbs}`;
+        else if (steerUIState === 'right') sharedDom.steerDisplay.innerText = `Lái phải: ${turnsAbs}`;
+        else sharedDom.steerDisplay.innerText = `Thẳng lái: 0.00`;
         sharedDom.wheelImg.style.transform = `rotate(${car.steeringTurns * 360}deg)`;
     }
 
@@ -203,8 +228,9 @@ function initGhepDoc(container, sharedDom) {
     }
 
     function draw() {
-        ctx.fillStyle = '#16a34a';
+        ctx.fillStyle = '#111827';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Vẽ map
         ctx.save();
         ctx.translate(mapOffsetX, mapOffsetY);
         // Vẽ đường
@@ -230,12 +256,16 @@ function initGhepDoc(container, sharedDom) {
         ctx.beginPath();
         yellowLines.forEach(l => { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); });
         ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.stroke();
-        // Chú thích
-        ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 12px monospace';
-        ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, ENV.mapLeft + 50, ENV.roadBottom + 20);
-        ctx.save(); ctx.translate(ENV.rightRoadLeft - 15, ENV.roadTop - 40); ctx.rotate(-Math.PI/2); ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, 0, 0); ctx.restore();
-        ctx.fillStyle = '#fde047'; ctx.fillText(`Ld = ${ENV.Ld_m.toFixed(2)}m`, ENV.spotBorderRight + 15, ENV.chipTop + ENV.Ld/2);
-        ctx.fillText(`Rd = ${ENV.Rd_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rd/2, ENV.spotBorderBottom + 20);
+        // Chú thích kích thước (bật/tắt theo config)
+        // ...existing code...
+        if (showDimensions) {
+            // ...existing code...
+            ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 12px monospace';
+            ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, ENV.mapLeft + 50, ENV.roadBottom + 20);
+            ctx.save(); ctx.translate(ENV.rightRoadLeft - 15, ENV.roadTop - 40); ctx.rotate(-Math.PI/2); ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, 0, 0); ctx.restore();
+            ctx.fillStyle = '#fde047'; ctx.fillText(`Ld = ${ENV.Ld_m.toFixed(2)}m`, ENV.spotBorderRight + 15, ENV.chipTop + ENV.Ld/2);
+            ctx.fillText(`Rd = ${ENV.Rd_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rd/2, ENV.spotBorderBottom + 20);
+        }
         // Xe
         ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.angle);
         if (carImage.complete && carImage.naturalWidth) {
@@ -322,15 +352,24 @@ function initGhepDoc(container, sharedDom) {
     }
 
     function resizeAndOffset() {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        // ------------------------- ĐIỀU CHỈNH KÍCH THƯỚC MAP -------------------------
+        // Muốn thay đổi cách căn chỉnh map, sửa các dòng dưới đây:
+        // - mapOffsetX: căn giữa theo chiều ngang (có thể thay đổi để lệch trái/phải)
+        // - mapOffsetY: căn giữa theo chiều dọc. Bỏ /2 để dính sát mép trên.
         const minX = ENV.mapLeft;
         const maxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
         const minY = Math.min(ENV.roadTop, ENV.rightRoadTop);
         const maxY = Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom);
         const mapW = maxX - minX, mapH = maxY - minY;
+        // Căn giữa chiều ngang (tự động)
         mapOffsetX = (canvas.width - mapW) / 2 - minX;
+        // Căn giữa chiều dọc (nếu muốn stretch full, dùng (canvas.height - mapH) / 2 - minY)
+        // Hiện tại đang căn giữa dọc. Để dính sát trên, thay bằng: mapOffsetY = -minY;
+        // Để dính sát dưới: mapOffsetY = canvas.height - mapH - minY;
         mapOffsetY = (canvas.height - mapH) / 2 - minY;
+        // ----------------------------------------------------------------------------
     }
 
     function loop(ts) {
@@ -350,7 +389,7 @@ function initGhepDoc(container, sharedDom) {
     function setupEvents() {
         const keydown = (e) => { if (e.target.tagName !== 'INPUT') { if (e.key === 'a') keys.A = true; if (e.key === 'd') keys.D = true; } };
         const keyup = (e) => { if (e.key === 'a') keys.A = false; if (e.key === 'd') keys.D = false; };
-        const wheel = (e) => { if (!e.target.closest('.dashboard')) { car.gear = e.deltaY < 0 ? 1 : -1; updateGearUI(); e.preventDefault(); } };
+        const wheel = (e) => { if (!e.target.closest('.modal-backdrop')) { car.gear = e.deltaY < 0 ? 1 : -1; updateGearUI(); e.preventDefault(); } };
         const mousedown = (e) => { if (e.button === 0) car.isMoving = true; };
         const mouseup = () => { car.isMoving = false; };
         const mouseleaveCanvas = () => { car.isMoving = false; };
@@ -386,6 +425,5 @@ function initGhepDoc(container, sharedDom) {
         if (animationId) cancelAnimationFrame(animationId);
         window.removeEventListener('resize', resizeAndOffset);
         removeEvents();
-        container.innerHTML = '';
     };
 }
