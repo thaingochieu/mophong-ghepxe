@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Mô Phỏng Ghép Xe - Góc nhìn Lái</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/common.js"></script>
     <style>
         :root {
-            --wheel-opacity: 0.22;
-            --dash-opacity: 0.92;
+            --wheel-opacity: 0.15;
         }
         body {
             margin: 0;
@@ -102,6 +102,32 @@
             animation: pulseWarning 0.6s infinite alternate;
             white-space: nowrap;
         }
+        #carHud {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 4px 10px;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s;
+        }
+        .hud-gear {
+            font-size: 1.1rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+        .hud-steer {
+            font-size: 0.75rem;
+            font-weight: bold;
+            white-space: nowrap;
+        }
         @keyframes pulseWarning {
             from { opacity: 1; transform: translateX(-50%) scale(1); }
             to { opacity: 0.8; transform: translateX(-50%) scale(1.05); }
@@ -152,10 +178,16 @@
 <!-- Vô lăng overlay -->
 <div class="wheel-overlay-container">
     <img id="wheelImg" src="images/steering_wheel.png" class="wheel-image" alt="Vô lăng" onerror="this.src='data:image/svg+xml,%3Csvg...%3E'">
+    <!-- 
     <div id="wheelCenterDash" class="wheel-center-dash">
-        <div id="gearDisplay" class="gear-text text-red-500">TIẾN</div>
-        <div id="steerDisplay" class="steer-text text-yellow-400">Thẳng lái</div>
+        <-- Text moved to HUD -->
     </div>
+    -->
+</div>
+
+<div id="carHud" class="hidden">
+    <div id="hudGear" class="hud-gear text-red-500">TIẾN</div>
+    <div id="hudSteer" class="hud-steer text-yellow-400">Thẳng lái</div>
 </div>
 
 <!-- Cảnh báo -->
@@ -225,12 +257,8 @@
             <div class="space-y-3">
                 <h3 class="text-purple-400 font-bold border-b border-gray-700 pb-1">Hiệu Ứng Hiển Thị</h3>
                 <div>
-                    <label class="text-gray-300 flex justify-between mb-1">Độ mờ vô lăng: <span id="wheelOpacityVal">0.22</span></label>
-                    <input type="range" id="cfgWheelOpacity" class="w-full" min="0" max="1" step="0.01" value="0.22">
-                </div>
-                <div>
-                    <label class="text-gray-300 flex justify-between mb-1">Độ mờ đĩa dash: <span id="dashOpacityVal">0.92</span></label>
-                    <input type="range" id="cfgDashOpacity" class="w-full" min="0" max="1" step="0.01" value="0.92">
+                    <label class="text-gray-300 flex justify-between mb-1">Độ mờ vô lăng: <span id="wheelOpacityVal">0.15</span></label>
+                    <input type="range" id="cfgWheelOpacity" class="w-full" min="0" max="1" step="0.01" value="0.15">
                 </div>
                 <div class="flex items-center justify-between">
                     <label class="text-gray-300">Hiển thị kích thước (Ld,Rd,Ed...)</label>
@@ -272,6 +300,9 @@
         wheelCenterDash: document.getElementById('wheelCenterDash'),
         gearDisplay: document.getElementById('gearDisplay'),
         steerDisplay: document.getElementById('steerDisplay'),
+        hudGear: document.getElementById('hudGear'),
+        hudSteer: document.getElementById('hudSteer'),
+        carHud: document.getElementById('carHud'),
         warningMsg: document.getElementById('warningMsg'),
         btnReset: document.getElementById('btnReset'),
         btnMenu: document.getElementById('btnMenu'),
@@ -284,12 +315,10 @@
         cfgMoveSpeed: document.getElementById('cfgMoveSpeed'),
         cfgSteerSpeed: document.getElementById('cfgSteerSpeed'),
         cfgWheelOpacity: document.getElementById('cfgWheelOpacity'),
-        cfgDashOpacity: document.getElementById('cfgDashOpacity'),
         cfgShowDimensions: document.getElementById('cfgShowDimensions'),
         valMove: document.getElementById('valMove'),
         valSteer: document.getElementById('valSteer'),
         wheelOpacityVal: document.getElementById('wheelOpacityVal'),
-        dashOpacityVal: document.getElementById('dashOpacityVal'),
         carImg: document.getElementById('carImg')
     };
 
@@ -320,9 +349,8 @@
 
     // Overlay opacity control (wheel + dash)
     let currentWheelOpacity = parseFloat(dom.cfgWheelOpacity.value);
-    let currentDashOpacity = parseFloat(dom.cfgDashOpacity.value);
+    let currentDashOpacity = 0.8;
     dom.wheelOpacityVal.innerText = currentWheelOpacity.toFixed(2);
-    dom.dashOpacityVal.innerText = currentDashOpacity.toFixed(2);
 
     function applyOverlayOpacity() {
         document.documentElement.style.setProperty('--wheel-opacity', String(currentWheelOpacity));
@@ -340,11 +368,6 @@
     dom.cfgWheelOpacity.addEventListener('input', (e) => {
         currentWheelOpacity = parseFloat(e.target.value);
         dom.wheelOpacityVal.innerText = currentWheelOpacity.toFixed(2);
-        applyOverlayOpacity();
-    });
-    dom.cfgDashOpacity.addEventListener('input', (e) => {
-        currentDashOpacity = parseFloat(e.target.value);
-        dom.dashOpacityVal.innerText = currentDashOpacity.toFixed(2);
         applyOverlayOpacity();
     });
     applyOverlayOpacity();

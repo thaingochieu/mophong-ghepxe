@@ -6,12 +6,17 @@ function initGhepNgang(sharedDom, options = {}) {
     const COLLISION_SIDE_SCALE = 0.72;
     const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 };
     const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 };
-    const HUD_DASH_OPACITY_NORMAL = 0.92;
     const HUD_DASH_OPACITY_OVERLAP = 0.18;
     const HUD_RESTORE_DELAY_MS = 250;
     const STEER_ENTER_STRAIGHT_THRESHOLD = 0.015;
     const STEER_EXIT_STRAIGHT_THRESHOLD = 0.03;
     const GUIDE_DOT_RADIUS = 10;
+
+    // Sử dụng canvas có sẵn từ DOM
+    const canvas = sharedDom.canvas;
+    const ctx = canvas.getContext('2d');
+    const warningDiv = sharedDom.warningMsg;
+    const carImage = sharedDom.carImg;
 
     // Đảm bảo có thể dùng hàm từ common.js (dự phòng)
     const linesIntersect = window.linesIntersect || function(a,b,c,d,p,q,r,s) {
@@ -49,11 +54,64 @@ function initGhepNgang(sharedDom, options = {}) {
         ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
     };
+    const gameUtils = window.GameUtils || {};
+    const clamp01 = gameUtils.clamp01 || ((val) => Math.min(1, Math.max(0, Number(val))));
+    const getCarEdges = gameUtils.getCarEdges || function(corners) {
+        return [[corners[0], corners[1]], [corners[1], corners[2]], [corners[2], corners[3]], [corners[3], corners[0]]];
+    };
+    const hasAnyEdgeIntersection = gameUtils.hasAnyEdgeIntersection || function(edges, lines) {
+        for (const edge of edges) {
+            for (const line of lines) {
+                if (linesIntersect(edge[0].x, edge[0].y, edge[1].x, edge[1].y, line.x1, line.y1, line.x2, line.y2)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    const prepareImageCrop = gameUtils.prepareImageCrop || function(image, cropState) {
+        if (!image || !cropState) return false;
+        if (!image.complete || image.naturalWidth <= 0) return false;
+        if (cropState.ready) return true;
+        const w = image.naturalWidth, h = image.naturalHeight;
+        const offCanvas = (typeof OffscreenCanvas !== 'undefined') ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.drawImage(image, 0, 0);
+        const imgData = offCtx.getImageData(0, 0, w, h).data;
+        let minX = w, minY = h, maxX = 0, maxY = 0;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                if (imgData[(y * w + x) * 4 + 3] > 12) {
+                    minX = Math.min(minX, x); minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+                }
+            }
+        }
+        if (maxX >= minX && maxY >= minY) {
+            cropState.sx = minX; cropState.sy = minY;
+            cropState.sw = maxX - minX + 1; cropState.sh = maxY - minY + 1;
+        } else {
+            cropState.sx = 0; cropState.sy = 0;
+            cropState.sw = w; cropState.sh = h;
+        }
+        cropState.ready = true;
+        return true;
+    };
 
     // ===== CẤU HÌNH HIỂN THỊ =====
     let showDimensions = options.showDimensions !== undefined ? options.showDimensions : true;
-    let wheelOpacity = options.wheelOpacity !== undefined ? Number(options.wheelOpacity) : 0.22;
+    let wheelOpacity = options.wheelOpacity !== undefined ? Number(options.wheelOpacity) : 0.15;
     let dashOpacity = options.dashOpacity !== undefined ? Number(options.dashOpacity) : 0.92;
+    const applyWheelOpacity = (val) => {
+        wheelOpacity = clamp01(val);
+        document.documentElement.style.setProperty('--wheel-opacity', String(wheelOpacity));
+    };
+    const applyDashOpacity = (val) => {
+        dashOpacity = clamp01(val);
+        document.documentElement.style.setProperty('--dash-opacity', String(dashOpacity));
+        // applyHudDashOpacity(isHudOverlapped); // Comment out central circle logic
+    };
+
     window._currentGameModule = {
         showDimensions,
         setShowDimensions: (val) => { 
@@ -62,26 +120,13 @@ function initGhepNgang(sharedDom, options = {}) {
             draw();
             // ...existing code...
         },
-        setWheelOpacity: (val) => {
-            wheelOpacity = Math.min(1, Math.max(0, Number(val)));
-            document.documentElement.style.setProperty('--wheel-opacity', String(wheelOpacity));
-        },
-        setDashOpacity: (val) => {
-            dashOpacity = Math.min(1, Math.max(0, Number(val)));
-            document.documentElement.style.setProperty('--dash-opacity', String(dashOpacity));
-            applyHudDashOpacity(isHudOverlapped);
-        }
+        setWheelOpacity: applyWheelOpacity,
+        setDashOpacity: applyDashOpacity
     };
     // ...existing code...
     document.documentElement.style.setProperty('--wheel-opacity', String(wheelOpacity));
     document.documentElement.style.setProperty('--dash-opacity', String(dashOpacity));
 
-    // Sử dụng canvas có sẵn từ DOM
-    const canvas = sharedDom.canvas;
-    const ctx = canvas.getContext('2d');
-    const warningDiv = sharedDom.warningMsg;
-    const carImage = sharedDom.carImg;
-    
     let ENV = {}, yellowLines = [], borderLines = [];
     let mapOffsetX = 0, mapOffsetY = 0;
     let CAR_A = parseFloat(sharedDom.cfgCarA.value);
@@ -108,8 +153,59 @@ function initGhepNgang(sharedDom, options = {}) {
     let hudRect = null;
     let isHudOverlapped = false;
     let hudRestoreTimer = null;
-    
+
     const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
+
+    /* -- PHẦN CODE VÒNG TRÒN TRUNG TÂM (Tạm comment) --
+    function refreshHudRect() {
+        if (!sharedDom.wheelCenterDash) return;
+        hudRect = sharedDom.wheelCenterDash.getBoundingClientRect();
+    }
+
+    function applyHudDashOpacity(isOverlapped) {
+        if (!sharedDom.wheelCenterDash) return;
+        const overlapOpacity = Math.min(dashOpacity, HUD_DASH_OPACITY_OVERLAP);
+        sharedDom.wheelCenterDash.style.opacity = isOverlapped ? String(overlapOpacity) : String(dashOpacity);
+    }
+
+    function setHudOverlapState(isOverlapped) {
+        if (isOverlapped) {
+            if (hudRestoreTimer) {
+                clearTimeout(hudRestoreTimer);
+                hudRestoreTimer = null;
+            }
+            if (!isHudOverlapped) {
+                isHudOverlapped = true;
+                applyHudDashOpacity(true);
+            }
+            return;
+        }
+        if (!isHudOverlapped) return;
+        if (!hudRestoreTimer) {
+            hudRestoreTimer = setTimeout(() => {
+                isHudOverlapped = false;
+                applyHudDashOpacity(false);
+                hudRestoreTimer = null;
+            }, HUD_RESTORE_DELAY_MS);
+        }
+    }
+
+    function updateHudOcclusion() {
+        if (!hudRect) return;
+        const corners = getCarCorners();
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const corner of corners) {
+            const sx = corner.x + mapOffsetX;
+            const sy = corner.y + mapOffsetY;
+            if (sx < minX) minX = sx;
+            if (sy < minY) minY = sy;
+            if (sx > maxX) maxX = sx;
+            if (sy > maxY) maxY = sy;
+        }
+        const carRect = { left: minX, top: minY, right: maxX, bottom: maxY };
+        setHudOverlapState(intersectsRect(carRect, hudRect));
+    }
+    ------------------------------------------------ */
 
     function calculateEnvironment() {
         const Lg_m = (5 * CAR_A) / 3;
@@ -164,62 +260,19 @@ function initGhepNgang(sharedDom, options = {}) {
     }
 
     function updateGearUI() {
-        // Cập nhật hiển thị số trên bảng điều khiển trung tâm
-        if (car.gear === 1) sharedDom.gearDisplay.innerText = "TIẾN";
-        else sharedDom.gearDisplay.innerText = "LÙI";
+        // Cập nhật hiển thị số trên HUD
+        const gearText = car.gear === 1 ? "TIẾN" : "LÙI";
+        if (sharedDom.hudGear) sharedDom.hudGear.innerText = gearText;
+        if (sharedDom.gearDisplay) sharedDom.gearDisplay.innerText = gearText;
     }
 
-    function refreshHudRect() {
-        if (!sharedDom.wheelCenterDash) return;
-        hudRect = sharedDom.wheelCenterDash.getBoundingClientRect();
-    }
-
-    function applyHudDashOpacity(isOverlapped) {
-        if (!sharedDom.wheelCenterDash) return;
-        const overlapOpacity = Math.min(dashOpacity, HUD_DASH_OPACITY_OVERLAP);
-        sharedDom.wheelCenterDash.style.opacity = isOverlapped ? String(overlapOpacity) : String(dashOpacity);
-    }
-
-    function setHudOverlapState(isOverlapped) {
-        if (isOverlapped) {
-            if (hudRestoreTimer) {
-                clearTimeout(hudRestoreTimer);
-                hudRestoreTimer = null;
-            }
-            if (!isHudOverlapped) {
-                isHudOverlapped = true;
-                applyHudDashOpacity(true);
-            }
-            return;
+    function showWarning(text, color) {
+        if (gameUtils.showWarning) gameUtils.showWarning(warningDiv, text, color);
+        else {
+            warningDiv.innerText = text;
+            warningDiv.style.backgroundColor = color;
+            warningDiv.style.display = 'block';
         }
-        if (!isHudOverlapped) return;
-        if (!hudRestoreTimer) {
-            hudRestoreTimer = setTimeout(() => {
-                isHudOverlapped = false;
-                applyHudDashOpacity(false);
-                hudRestoreTimer = null;
-            }, HUD_RESTORE_DELAY_MS);
-        }
-    }
-
-    function intersectsRect(a, b) {
-        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-    }
-
-    function updateHudOcclusion() {
-        if (!hudRect) return;
-        const corners = getCarCorners();
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const corner of corners) {
-            const sx = corner.x + mapOffsetX;
-            const sy = corner.y + mapOffsetY;
-            if (sx < minX) minX = sx;
-            if (sy < minY) minY = sy;
-            if (sx > maxX) maxX = sx;
-            if (sy > maxY) maxY = sy;
-        }
-        const carRect = { left: minX, top: minY, right: maxX, bottom: maxY };
-        setHudOverlapState(intersectsRect(carRect, hudRect));
     }
 
     function getCarCorners(cx = car.x, cy = car.y, ca = car.angle) {
@@ -256,7 +309,7 @@ function initGhepNgang(sharedDom, options = {}) {
         if (hasParkingSuccess && !hasExerciseCompleted && isCarOnMainRoad() && car.y < ENV.chipTop - 20) hasExerciseCompleted = true;
     }
 
-    function updateSteeringUIState(nowMs) {
+    function updateSteeringUIState() {
         const turnsAbsRaw = Math.abs(car.steeringTurns);
         if (isSteerInStraightZone) {
             if (turnsAbsRaw >= STEER_EXIT_STRAIGHT_THRESHOLD) isSteerInStraightZone = false;
@@ -265,36 +318,33 @@ function initGhepNgang(sharedDom, options = {}) {
         }
         const displayTurns = isSteerInStraightZone ? 0 : car.steeringTurns;
         const turnsAbs = Math.abs(displayTurns).toFixed(2);
-        if (displayTurns < 0) sharedDom.steerDisplay.innerText = `Lái trái: ${turnsAbs}`;
-        else if (displayTurns > 0) sharedDom.steerDisplay.innerText = `Lái phải: ${turnsAbs}`;
-        else sharedDom.steerDisplay.innerText = `Thẳng lái: 0.00`;
+        
+        let steerText = "";
+        if (displayTurns < 0) steerText = `Lái trái: ${turnsAbs}`;
+        else if (displayTurns > 0) steerText = `Lái phải: ${turnsAbs}`;
+        else steerText = `Thẳng lái: 0.00`;
+
+        if (sharedDom.hudSteer) sharedDom.hudSteer.innerText = steerText;
+        if (sharedDom.steerDisplay) sharedDom.steerDisplay.innerText = steerText;
+
         sharedDom.wheelImg.style.transform = `rotate(${displayTurns * 360}deg)`;
     }
 
+    function updateHudPosition() {
+        if (!sharedDom.carHud) return;
+        const screenX = car.x + mapOffsetX;
+        const screenY = car.y + mapOffsetY;
+        
+        // Cập nhật vị trí HUD bám theo xe, lệch lên trên một chút
+        sharedDom.carHud.style.left = `${screenX}px`;
+        sharedDom.carHud.style.top = `${screenY - 100}px`;
+        if (sharedDom.carHud.classList.contains('hidden')) {
+            sharedDom.carHud.classList.remove('hidden');
+        }
+    }
+
     function prepareCarImageCrop() {
-        if (!carImage.complete || carImage.naturalWidth <= 0 || carImageCrop.ready) return;
-        const w = carImage.naturalWidth, h = carImage.naturalHeight;
-        const offCanvas = new OffscreenCanvas(w, h);
-        const offCtx = offCanvas.getContext('2d');
-        offCtx.drawImage(carImage, 0, 0);
-        const imgData = offCtx.getImageData(0, 0, w, h).data;
-        let minX = w, minY = h, maxX = 0, maxY = 0;
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                if (imgData[(y * w + x) * 4 + 3] > 12) {
-                    minX = Math.min(minX, x); minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
-                }
-            }
-        }
-        if (maxX >= minX && maxY >= minY) {
-            carImageCrop.sx = minX; carImageCrop.sy = minY;
-            carImageCrop.sw = maxX - minX + 1; carImageCrop.sh = maxY - minY + 1;
-        } else {
-            carImageCrop.sx = 0; carImageCrop.sy = 0;
-            carImageCrop.sw = w; carImageCrop.sh = h;
-        }
-        carImageCrop.ready = true;
+        prepareImageCrop(carImage, carImageCrop);
     }
 
     function draw() {
@@ -400,7 +450,7 @@ function initGhepNgang(sharedDom, options = {}) {
         if (keys.A) car.steeringTurns -= steerDelta;
         if (keys.D) car.steeringTurns += steerDelta;
         car.steeringTurns = Math.min(GAME_CONFIG.maxSteerTurns, Math.max(-GAME_CONFIG.maxSteerTurns, car.steeringTurns));
-        updateSteeringUIState(now);
+        updateSteeringUIState();
 
         let hitBorder = false, hitYellow = false;
         if (car.isMoving && car.gear !== 0) {
@@ -410,39 +460,23 @@ function initGhepNgang(sharedDom, options = {}) {
             const nextY = car.y + Math.sin(car.angle) * vel;
             const nextAngle = car.angle + (vel / (ENV.carW * 0.6)) * Math.tan(wheelAngle);
             const nextCorners = getCarCorners(nextX, nextY, nextAngle);
-            const edges = [[nextCorners[0], nextCorners[1]], [nextCorners[1], nextCorners[2]], [nextCorners[2], nextCorners[3]], [nextCorners[3], nextCorners[0]]];
-            for (let e of edges) {
-                for (let l of borderLines) {
-                    if (linesIntersect(e[0].x, e[0].y, e[1].x, e[1].y, l.x1, l.y1, l.x2, l.y2)) { hitBorder = true; break; }
-                }
-                if (hitBorder) break;
-            }
+            hitBorder = hasAnyEdgeIntersection(getCarEdges(nextCorners), borderLines);
             if (!hitBorder) {
                 car.x = nextX; car.y = nextY; car.angle = nextAngle;
             }
         }
         const currCorners = getCarCorners();
-        const currEdges = [[currCorners[0], currCorners[1]], [currCorners[1], currCorners[2]], [currCorners[2], currCorners[3]], [currCorners[3], currCorners[0]]];
-        for (let e of currEdges) {
-            for (let l of yellowLines) {
-                if (linesIntersect(e[0].x, e[0].y, e[1].x, e[1].y, l.x1, l.y1, l.x2, l.y2)) { hitYellow = true; break; }
-            }
-            if (hitYellow) break;
-        }
+        const currEdges = getCarEdges(currCorners);
+        hitYellow = hasAnyEdgeIntersection(currEdges, yellowLines);
         if (!hitBorder) {
-            for (let e of currEdges) {
-                for (let l of borderLines) {
-                    if (linesIntersect(e[0].x, e[0].y, e[1].x, e[1].y, l.x1, l.y1, l.x2, l.y2)) { hitBorder = true; break; }
-                }
-                if (hitBorder) break;
-            }
+            hitBorder = hasAnyEdgeIntersection(currEdges, borderLines);
         }
         updateParkingMilestones(hitBorder, hitYellow);
-        updateHudOcclusion();
-        if (hitBorder) { warningDiv.innerText = 'XE CHẠM LỀ'; warningDiv.style.backgroundColor = '#991b1b'; warningDiv.style.display = 'block'; }
-        else if (hitYellow) { warningDiv.innerText = 'XE ĐÈ VẠCH'; warningDiv.style.backgroundColor = '#ef4444'; warningDiv.style.display = 'block'; }
-        else if (hasExerciseCompleted) { warningDiv.innerText = 'HOÀN THÀNH BÀI GHÉP XE'; warningDiv.style.backgroundColor = '#065f46'; warningDiv.style.display = 'block'; }
-        else if (hasParkingSuccess) { warningDiv.innerText = 'GHÉP XE THÀNH CÔNG'; warningDiv.style.backgroundColor = '#15803d'; warningDiv.style.display = 'block'; }
+        updateHudPosition();
+        if (hitBorder) showWarning('XE CHẠM LỀ', '#991b1b');
+        else if (hitYellow) showWarning('XE ĐÈ VẠCH', '#ef4444');
+        else if (hasExerciseCompleted) showWarning('HOÀN THÀNH BÀI GHÉP XE', '#065f46');
+        else if (hasParkingSuccess) showWarning('GHÉP XE THÀNH CÔNG', '#15803d');
         else warningDiv.style.display = 'none';
     }
 
@@ -457,8 +491,8 @@ function initGhepNgang(sharedDom, options = {}) {
         // Căn giữa chiều ngang
         mapOffsetX = (canvas.width - mapW) / 2 - minX;
         // Căn giữa chiều dọc (có thể thay đổi để stretch)
-        mapOffsetY = (canvas.height - (maxY - minY)) / 2 - minY;
-        refreshHudRect();
+        mapOffsetY = (canvas.height - mapH) / 2 - minY;
+        // refreshHudRect(); // Comment out central circle logic
         // ----------------------------------------------------------------------------
     }
 
@@ -506,6 +540,9 @@ function initGhepNgang(sharedDom, options = {}) {
 
     calculateEnvironment();
     resetCarPosition();
+    updateGearUI();
+    updateSteeringUIState();
+    // applyHudDashOpacity(false); // Comment out central circle logic
     resizeAndOffset();
     const removeEvents = setupEvents();
     animationId = requestAnimationFrame(loop);
