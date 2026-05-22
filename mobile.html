@@ -216,7 +216,7 @@
 <canvas id="gameCanvas"></canvas>
 
 <!-- Overlay thông báo -->
-<div id="warningMsg" class="warning-msg-mobile">⚠️ XE ĐÈ VẠCH ⚠️</div>
+<div id="warningMsg" class="warning-msg-mobile">XE ĐÈ VẠCH</div>
 
 <!-- Thanh công cụ trên cùng - bên trái -->
 <div class="top-bar">
@@ -611,8 +611,8 @@
             if(!hitBorder) for(let e of currEdges) for(let l of borderLines) if(linesIntersect(e[0].x,e[0].y,e[1].x,e[1].y,l.x1,l.y1,l.x2,l.y2)) { hitBorder=true; break; }
             updateParkingMilestones(hitBorder, hitYellow);
 
-            if(hitBorder) { warningDiv.innerText='⚠️ XE CHẠM LỀ ⚠️'; warningDiv.style.backgroundColor='#991b1b'; warningDiv.style.display='block'; }
-            else if(hitYellow) { warningDiv.innerText='⚠️ XE ĐÈ VẠCH ⚠️'; warningDiv.style.backgroundColor='#ef4444'; warningDiv.style.display='block'; }
+            if(hitBorder) { warningDiv.innerText='XE CHẠM LỀ'; warningDiv.style.backgroundColor='#991b1b'; warningDiv.style.display='block'; }
+            else if(hitYellow) { warningDiv.innerText='XE ĐÈ VẠCH'; warningDiv.style.backgroundColor='#ef4444'; warningDiv.style.display='block'; }
             else if(hasExerciseCompleted) { warningDiv.innerText='HOÀN THÀNH'; warningDiv.style.backgroundColor='#065f46'; warningDiv.style.display='block'; }
             else if(hasParkingSuccess) { warningDiv.innerText='GHÉP THÀNH CÔNG'; warningDiv.style.backgroundColor='#15803d'; warningDiv.style.display='block'; }
             else warningDiv.style.display='none';

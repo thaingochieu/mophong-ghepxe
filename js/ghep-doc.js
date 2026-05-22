@@ -11,6 +11,11 @@ function initGhepDoc(sharedDom, options = {}) {
     const HUD_DASH_OPACITY_NORMAL = 0.92;
     const HUD_DASH_OPACITY_OVERLAP = 0.18;
     const HUD_RESTORE_DELAY_MS = 250;
+    const STEER_ENTER_STRAIGHT_THRESHOLD = 0.015;
+    const STEER_EXIT_STRAIGHT_THRESHOLD = 0.03;
+    const GUIDE_DOT_RADIUS = 10;
+    const RIGHT_ROAD_EXTRA_DEPTH_PX = 350;
+    const SPOT_BOTTOM_GAP_PX = 8;
 
     // ===== CẤU HÌNH HIỂN THỊ =====
     let showDimensions = options.showDimensions !== undefined ? options.showDimensions : true;
@@ -102,6 +107,7 @@ function initGhepDoc(sharedDom, options = {}) {
         isMoving: false
     };
     const keys = { A: false, D: false };
+    let isSteerInStraightZone = true;
     let hasParkingSuccess = false, hasExerciseCompleted = false;
     let lastTime = 0, animationId = null;
     let hudRect = null;
@@ -125,8 +131,21 @@ function initGhepDoc(sharedDom, options = {}) {
         const MARGIN = 18;
         ENV.mapLeft = 40;
         ENV.roadTop = 260;
-        ENV.roadBottom = ENV.roadTop + ENV.Ed;
+        const baseRoadTop = ENV.roadTop;
+        const baseRoadBottom = baseRoadTop + ENV.Ed;
+        ENV.rightRoadTop = 40;
+        ENV.rightRoadBottom = baseRoadBottom + RIGHT_ROAD_EXTRA_DEPTH_PX;
         ENV.spotBorderLeft = ENV.mapLeft + ENV.Ed + 20;
+
+        // Giữ nguyên kích thước chuồng, chỉ tịnh tiến chuồng + đoạn đường ngang đi vào theo trục dọc.
+        const baseSpotBorderBottom = baseRoadBottom + (2 * MARGIN) + ENV.Ld;
+        const desiredSpotBorderBottom = ENV.rightRoadBottom - SPOT_BOTTOM_GAP_PX;
+        const spotVerticalOffset = desiredSpotBorderBottom - baseSpotBorderBottom;
+        ENV.roadTop = baseRoadTop + spotVerticalOffset;
+        ENV.roadBottom = ENV.roadTop + ENV.Ed;
+
+        // Chỉnh tay khoảng cách đáy chuồng với đáy đường dọc tại SPOT_BOTTOM_GAP_PX.
+        // Nhỏ hơn -> chuồng xuống sâu hơn; lớn hơn -> chuồng lên cao hơn.
         ENV.chipTop = ENV.roadBottom + MARGIN;
         ENV.chipBottom = ENV.chipTop + ENV.Ld;
         ENV.chipLeft = ENV.spotBorderLeft + MARGIN;
@@ -135,8 +154,6 @@ function initGhepDoc(sharedDom, options = {}) {
         ENV.spotBorderBottom = ENV.chipBottom + MARGIN;
         ENV.rightRoadLeft = ENV.spotBorderRight + ENV.Ed;
         ENV.rightRoadRight = ENV.rightRoadLeft + ENV.Ed;
-        ENV.rightRoadTop = 40;
-        ENV.rightRoadBottom = ENV.roadBottom + 120;
 
         yellowLines = [
             { x1: ENV.chipLeft, y1: ENV.chipTop, x2: ENV.chipLeft, y2: ENV.chipBottom },
@@ -164,6 +181,7 @@ function initGhepDoc(sharedDom, options = {}) {
         car.y = ENV.rightRoadTop + (ENV.carW / 2) + 20;
         car.angle = Math.PI / 2;
         car.steeringTurns = 0;
+        isSteerInStraightZone = true;
         car.isMoving = false;
         hasParkingSuccess = false;
         hasExerciseCompleted = false;
@@ -280,8 +298,13 @@ function initGhepDoc(sharedDom, options = {}) {
     }
 
     function updateSteeringUIState(nowMs) {
-        const neutralThreshold = 0.05;
-        const displayTurns = Math.abs(car.steeringTurns) <= neutralThreshold ? 0 : car.steeringTurns;
+        const turnsAbsRaw = Math.abs(car.steeringTurns);
+        if (isSteerInStraightZone) {
+            if (turnsAbsRaw >= STEER_EXIT_STRAIGHT_THRESHOLD) isSteerInStraightZone = false;
+        } else if (turnsAbsRaw <= STEER_ENTER_STRAIGHT_THRESHOLD) {
+            isSteerInStraightZone = true;
+        }
+        const displayTurns = isSteerInStraightZone ? 0 : car.steeringTurns;
         const turnsAbs = Math.abs(displayTurns).toFixed(2);
         if (displayTurns < 0) sharedDom.steerDisplay.innerText = `Lái trái: ${turnsAbs}`;
         else if (displayTurns > 0) sharedDom.steerDisplay.innerText = `Lái phải: ${turnsAbs}`;
@@ -337,13 +360,47 @@ function initGhepDoc(sharedDom, options = {}) {
         ctx.lineTo(ENV.mapLeft, ENV.roadBottom);
         ctx.closePath();
         ctx.fillStyle = '#64748b'; ctx.fill();
+
         ctx.lineWidth = 5; ctx.strokeStyle = 'white'; ctx.setLineDash([]); ctx.stroke();
         ctx.strokeStyle = '#ef4444'; ctx.setLineDash([15, 15]); ctx.stroke();
         ctx.setLineDash([]);
+
         // Vạch vàng
         ctx.beginPath();
         yellowLines.forEach(l => { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); });
         ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.stroke();
+
+        // 2 chấm căn map dọc (điểm xanh) - chỉnh tay tại phần offset bên dưới nếu cần đúng thực tế hơn.
+        // Dot 1: gần tâm đáy ô ghép
+        // Dot 2: gần mép dưới bên trái ô ghép
+        const guideDots = [
+            {
+                x: ENV.mapLeft,
+                y: ENV.roadBottom - ENV.Ed * 0.2
+                // Chỉnh tay: tăng/giảm x,y để di chuyển Dot 1.
+            },
+            {
+                x: ENV.chipLeft + ENV.Rd * 1.15,
+                y: ENV.chipBottom - ENV.Ld * 0.72
+                // Chỉnh tay: tăng/giảm x,y để di chuyển Dot 2.
+            },
+            {
+                x: ENV.chipLeft + ENV.Rd * 0.5,
+                y: ENV.chipBottom - ENV.Ld * -0.09
+                // Chỉnh tay: tăng/giảm x,y để di chuyển Dot 3.
+            }
+        ];
+        ctx.save();
+        ctx.fillStyle = '#39ff14';
+        ctx.shadowColor = 'rgba(57, 255, 20, 0.6)';
+        ctx.shadowBlur = 16;
+        for (const dot of guideDots) {
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, GUIDE_DOT_RADIUS, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+
         // Chú thích kích thước (bật/tắt theo config)
         // ...existing code...
         if (showDimensions) {
@@ -433,8 +490,8 @@ function initGhepDoc(sharedDom, options = {}) {
         }
         updateParkingMilestones(hitBorder, hitYellow);
         updateHudOcclusion();
-        if (hitBorder) { warningDiv.innerText = '⚠️ XE CHẠM LỀ ⚠️'; warningDiv.style.backgroundColor = '#991b1b'; warningDiv.style.display = 'block'; }
-        else if (hitYellow) { warningDiv.innerText = '⚠️ XE ĐÈ VẠCH ⚠️'; warningDiv.style.backgroundColor = '#ef4444'; warningDiv.style.display = 'block'; }
+        if (hitBorder) { warningDiv.innerText = 'XE CHẠM LỀ'; warningDiv.style.backgroundColor = '#991b1b'; warningDiv.style.display = 'block'; }
+        else if (hitYellow) { warningDiv.innerText = 'XE ĐÈ VẠCH'; warningDiv.style.backgroundColor = '#ef4444'; warningDiv.style.display = 'block'; }
         else if (hasExerciseCompleted) { warningDiv.innerText = 'HOÀN THÀNH BÀI GHÉP XE'; warningDiv.style.backgroundColor = '#065f46'; warningDiv.style.display = 'block'; }
         else if (hasParkingSuccess) { warningDiv.innerText = 'GHÉP XE THÀNH CÔNG'; warningDiv.style.backgroundColor = '#15803d'; warningDiv.style.display = 'block'; }
         else warningDiv.style.display = 'none';

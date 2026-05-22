@@ -9,6 +9,9 @@ function initGhepNgang(sharedDom, options = {}) {
     const HUD_DASH_OPACITY_NORMAL = 0.92;
     const HUD_DASH_OPACITY_OVERLAP = 0.18;
     const HUD_RESTORE_DELAY_MS = 250;
+    const STEER_ENTER_STRAIGHT_THRESHOLD = 0.015;
+    const STEER_EXIT_STRAIGHT_THRESHOLD = 0.03;
+    const GUIDE_DOT_RADIUS = 10;
 
     // Đảm bảo có thể dùng hàm từ common.js (dự phòng)
     const linesIntersect = window.linesIntersect || function(a,b,c,d,p,q,r,s) {
@@ -99,6 +102,7 @@ function initGhepNgang(sharedDom, options = {}) {
         isMoving: false
     };
     const keys = { A: false, D: false };
+    let isSteerInStraightZone = true;
     let hasParkingSuccess = false, hasExerciseCompleted = false;
     let lastTime = 0, animationId = null;
     let hudRect = null;
@@ -151,6 +155,7 @@ function initGhepNgang(sharedDom, options = {}) {
         car.y = ENV.chipBottom + ENV.carW / 2 + 100;
         car.angle = -Math.PI / 2;
         car.steeringTurns = 0;
+        isSteerInStraightZone = true;
         car.isMoving = false;
         hasParkingSuccess = false;
         hasExerciseCompleted = false;
@@ -252,8 +257,13 @@ function initGhepNgang(sharedDom, options = {}) {
     }
 
     function updateSteeringUIState(nowMs) {
-        const neutralThreshold = 0.05;
-        const displayTurns = Math.abs(car.steeringTurns) <= neutralThreshold ? 0 : car.steeringTurns;
+        const turnsAbsRaw = Math.abs(car.steeringTurns);
+        if (isSteerInStraightZone) {
+            if (turnsAbsRaw >= STEER_EXIT_STRAIGHT_THRESHOLD) isSteerInStraightZone = false;
+        } else if (turnsAbsRaw <= STEER_ENTER_STRAIGHT_THRESHOLD) {
+            isSteerInStraightZone = true;
+        }
+        const displayTurns = isSteerInStraightZone ? 0 : car.steeringTurns;
         const turnsAbs = Math.abs(displayTurns).toFixed(2);
         if (displayTurns < 0) sharedDom.steerDisplay.innerText = `Lái trái: ${turnsAbs}`;
         else if (displayTurns > 0) sharedDom.steerDisplay.innerText = `Lái phải: ${turnsAbs}`;
@@ -309,6 +319,41 @@ function initGhepNgang(sharedDom, options = {}) {
         ctx.beginPath();
         yellowLines.forEach(l => { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); });
         ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.stroke();
+
+        // Chấm căn map ngang (điểm xanh) - chỉnh tay nhanh ngay tại x/y từng điểm bên dưới.
+        const guideDots = [
+            {
+                x: ENV.roadLeft + (ENV.roadRight - ENV.roadLeft) * 0.56,
+                y: ENV.mapTop + 22
+                // Chỉnh tay điểm 1: vùng phía trên làn dọc.
+            },
+            {
+                x: ENV.borderRight + 100,
+                y: ENV.borderTop - 50
+                // Chỉnh tay điểm 2: vùng trên bên phải ô ghép ngang.
+            },
+            {
+                x: ENV.borderRight + 100,
+                y: ENV.chipTop + ENV.Lg * 0.75
+                // Chỉnh tay điểm 3: vùng giữa bên phải.
+            },
+            {
+                x: ENV.borderRight + 100,
+                y: ENV.borderBottom - 15
+                // Chỉnh tay điểm 4: vùng dưới bên phải.
+            }
+        ];
+        ctx.save();
+        ctx.fillStyle = '#39ff14';
+        ctx.shadowColor = 'rgba(57, 255, 20, 0.6)';
+        ctx.shadowBlur = 14;
+        for (const dot of guideDots) {
+            ctx.beginPath();
+            ctx.arc(dot.x, dot.y, GUIDE_DOT_RADIUS, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+
         // Chú thích kích thước (bật/tắt theo config)
         if (showDimensions) {
             // ...existing code...
@@ -394,8 +439,8 @@ function initGhepNgang(sharedDom, options = {}) {
         }
         updateParkingMilestones(hitBorder, hitYellow);
         updateHudOcclusion();
-        if (hitBorder) { warningDiv.innerText = '⚠️ XE CHẠM LỀ ⚠️'; warningDiv.style.backgroundColor = '#991b1b'; warningDiv.style.display = 'block'; }
-        else if (hitYellow) { warningDiv.innerText = '⚠️ XE ĐÈ VẠCH ⚠️'; warningDiv.style.backgroundColor = '#ef4444'; warningDiv.style.display = 'block'; }
+        if (hitBorder) { warningDiv.innerText = 'XE CHẠM LỀ'; warningDiv.style.backgroundColor = '#991b1b'; warningDiv.style.display = 'block'; }
+        else if (hitYellow) { warningDiv.innerText = 'XE ĐÈ VẠCH'; warningDiv.style.backgroundColor = '#ef4444'; warningDiv.style.display = 'block'; }
         else if (hasExerciseCompleted) { warningDiv.innerText = 'HOÀN THÀNH BÀI GHÉP XE'; warningDiv.style.backgroundColor = '#065f46'; warningDiv.style.display = 'block'; }
         else if (hasParkingSuccess) { warningDiv.innerText = 'GHÉP XE THÀNH CÔNG'; warningDiv.style.backgroundColor = '#15803d'; warningDiv.style.display = 'block'; }
         else warningDiv.style.display = 'none';
