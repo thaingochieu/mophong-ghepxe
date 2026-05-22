@@ -180,7 +180,7 @@
     <img id="wheelImg" src="images/steering_wheel.png" class="wheel-image" alt="Vô lăng" onerror="this.src='data:image/svg+xml,%3Csvg...%3E'">
     <!-- 
     <div id="wheelCenterDash" class="wheel-center-dash">
-        <-- Text moved to HUD -->
+        <!-- Text moved to HUD -->
     </div>
     -->
 </div>
@@ -219,7 +219,6 @@
             <button id="btnModeNgang" class="w-full py-3 rounded-lg font-bold text-lg border-2 border-transparent bg-gray-700 text-white hover:bg-gray-600 transition">Ghép Xe Ngang (Đỗ Song Song)</button>
             <hr class="border-gray-700 my-2">
             <button id="openConfigBtn" class="w-full py-3 rounded-lg font-bold bg-blue-600/80 hover:bg-blue-500 text-white transition">Cấu Hình Thông Số</button>
-            <button id="openGuideBtn" class="w-full py-3 rounded-lg font-bold bg-emerald-600/80 hover:bg-emerald-500 text-white transition">Hướng Dẫn Điều Khiển</button>
         </div>
     </div>
 </div>
@@ -255,6 +254,16 @@
                 </div>
             </div>
             <div class="space-y-3">
+                <h3 class="text-orange-400 font-bold border-b border-gray-700 pb-1">Điều Khiển</h3>
+                <div class="flex items-center justify-between">
+                    <label class="text-gray-300">Chế độ điều khiển:</label>
+                    <select id="cfgControlMode" class="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-sm">
+                        <option value="kb" selected>Chỉ bàn phím</option>
+                        <option value="hybrid">Chuột + Bàn phím</option>
+                    </select>
+                </div>
+            </div>
+            <div class="space-y-3">
                 <h3 class="text-purple-400 font-bold border-b border-gray-700 pb-1">Hiệu Ứng Hiển Thị</h3>
                 <div>
                     <label class="text-gray-300 flex justify-between mb-1">Độ mờ vô lăng: <span id="wheelOpacityVal">0.15</span></label>
@@ -277,15 +286,11 @@
             <h2 class="text-xl font-bold text-white">Hướng Dẫn Lái</h2>
             <button class="btnBackToMenu text-gray-400 hover:text-white">&larr; Quay lại</button>
         </div>
-        <div class="p-6 text-gray-300 space-y-4 leading-relaxed">
-            <p><kbd>A</kbd> / <kbd>D</kbd> : Nhấn giữ để quay vô lăng Trái / Phải.</p>
-            <p><kbd>Cuộn Chuột ↑</kbd> : Vào số <b>TIẾN</b>.</p>
-            <p><kbd>Cuộn Chuột ↓</kbd> : Vào số <b>LÙI</b>.</p>
-            <p><kbd>Giữ Chuột Trái</kbd> : Đạp chân ga (Xe di chuyển). Nhả chuột để phanh.</p>
-            <div class="bg-gray-900/50 p-3 rounded text-sm border border-gray-700">
-                * Lưu ý: Kết hợp vừa nhấn giữ ga vừa đánh lái. Nhìn vào tâm vô lăng để biết góc lái và số hiện tại.
-            </div>
-            <button class="btnCloseModal w-full py-3 mt-2 rounded-lg font-bold bg-gray-700 hover:bg-gray-600 text-white">Đã Hiểu</button>
+        <div id="guideContent" class="p-6 text-gray-300 space-y-6 leading-relaxed max-h-[70vh] overflow-y-auto">
+            <!-- Content will be updated by JS -->
+        </div>
+        <div class="p-6 pt-0">
+            <button class="btnCloseModal w-full py-3 rounded-lg font-bold bg-gray-700 hover:bg-gray-600 text-white">Đã Hiểu</button>
         </div>
     </div>
 </div>
@@ -309,9 +314,9 @@
         btnModeDoc: document.getElementById('btnModeDoc'),
         btnModeNgang: document.getElementById('btnModeNgang'),
         openConfigBtn: document.getElementById('openConfigBtn'),
-        openGuideBtn: document.getElementById('openGuideBtn'),
         cfgCarA: document.getElementById('cfgCarA'),
         cfgCarB: document.getElementById('cfgCarB'),
+        cfgControlMode: document.getElementById('cfgControlMode'),
         cfgMoveSpeed: document.getElementById('cfgMoveSpeed'),
         cfgSteerSpeed: document.getElementById('cfgSteerSpeed'),
         cfgWheelOpacity: document.getElementById('cfgWheelOpacity'),
@@ -328,6 +333,7 @@
 
     function openModal(id) {
         modals.forEach(m => document.getElementById(m).classList.remove('active'));
+        if (id === 'modalGuide') updateGuideContent();
         document.getElementById(id).classList.add('active');
         isModalOpen = true;
     }
@@ -339,7 +345,33 @@
     document.querySelectorAll('.btnBackToMenu').forEach(btn => btn.addEventListener('click', () => openModal('modalMenu')));
     dom.btnMenu.addEventListener('click', () => openModal('modalMenu'));
     dom.openConfigBtn.addEventListener('click', () => openModal('modalConfig'));
-    dom.openGuideBtn.addEventListener('click', () => openModal('modalGuide'));
+
+    function updateGuideContent() {
+        const content = document.getElementById('guideContent');
+        if (controlMode === 'kb') {
+            content.innerHTML = `
+                <section class="space-y-3">
+                    <h3 class="text-white font-bold border-b border-gray-700 pb-1">Chế độ: Chỉ bàn phím</h3>
+                    <p><kbd>←</kbd> / <kbd>→</kbd> : Đánh lái <b>Trái / Phải</b>.</p>
+                    <p><kbd>D</kbd> / <kbd>R</kbd> : Vào số <b>TIẾN / LÙI</b>.</p>
+                    <p><kbd>Giữ Space</kbd> : Nhấn <b>GA</b> để di chuyển. Nhả để phanh.</p>
+                </section>
+                <div class="bg-blue-900/30 p-3 rounded text-sm border border-blue-800 text-blue-200">
+                    * Bạn có thể chuyển sang dùng Chuột trong phần <b>Cấu Hình</b>.
+                </div>`;
+        } else {
+            content.innerHTML = `
+                <section class="space-y-3">
+                    <h3 class="text-white font-bold border-b border-gray-700 pb-1">Chế độ: Chuột + Bàn phím</h3>
+                    <p><kbd>A</kbd> / <kbd>D</kbd> : Đánh lái <b>Trái / Phải</b>.</p>
+                    <p><kbd>Lăn chuột ↑ / ↓</kbd> : Vào số <b>TIẾN / LÙI</b>.</p>
+                    <p><kbd>Giữ Chuột Trái</kbd> : Nhấn <b>GA</b> để di chuyển. Nhả để phanh.</p>
+                </section>
+                <div class="bg-blue-900/30 p-3 rounded text-sm border border-blue-800 text-blue-200">
+                    * Bạn có thể chuyển sang Chỉ bàn phím trong phần <b>Cấu Hình</b>.
+                </div>`;
+        }
+    }
 
     // Update config labels
     dom.cfgMoveSpeed.addEventListener('input', (e) => { dom.valMove.innerText = e.target.value; });
@@ -405,19 +437,29 @@
                 activeCleanup = initGhepDoc(dom, {
                     showDimensions: showDimensions,
                     wheelOpacity: currentWheelOpacity,
-                    dashOpacity: currentDashOpacity
+                    dashOpacity: currentDashOpacity,
+                    controlMode: controlMode
                 });
             } else if (mode === 'ngang' && typeof initGhepNgang === 'function') {
                 activeCleanup = initGhepNgang(dom, {
                     showDimensions: showDimensions,
                     wheelOpacity: currentWheelOpacity,
-                    dashOpacity: currentDashOpacity
+                    dashOpacity: currentDashOpacity,
+                    controlMode: controlMode
                 });
             }
             applyOverlayOpacity();
         };
         document.body.appendChild(script);
     }
+
+    // Control Mode management
+    let controlMode = dom.cfgControlMode.value; // 'kb' or 'hybrid'
+    dom.cfgControlMode.addEventListener('change', (e) => {
+        controlMode = e.target.value;
+        if (activeMode) loadMode(activeMode);
+        openModal('modalGuide');
+    });
 
     // Event listeners for mode buttons
     dom.btnModeDoc.addEventListener('click', () => loadMode('doc'));

@@ -102,6 +102,9 @@ function initGhepNgang(sharedDom, options = {}) {
     let showDimensions = options.showDimensions !== undefined ? options.showDimensions : true;
     let wheelOpacity = options.wheelOpacity !== undefined ? Number(options.wheelOpacity) : 0.15;
     let dashOpacity = options.dashOpacity !== undefined ? Number(options.dashOpacity) : 0.92;
+    let controlMode = options.controlMode || 'kb'; // 'kb' or 'hybrid'
+
+    // Lưu để module có thể cập nhật từ index.html
     const applyWheelOpacity = (val) => {
         wheelOpacity = clamp01(val);
         document.documentElement.style.setProperty('--wheel-opacity', String(wheelOpacity));
@@ -511,12 +514,74 @@ function initGhepNgang(sharedDom, options = {}) {
     }
 
     function setupEvents() {
-        const keydown = (e) => { if (e.target.tagName !== 'INPUT') { if (e.key === 'a') keys.A = true; if (e.key === 'd') keys.D = true; } };
-        const keyup = (e) => { if (e.key === 'a') keys.A = false; if (e.key === 'd') keys.D = false; };
-        const wheel = (e) => { if (!e.target.closest('.modal-backdrop')) { car.gear = e.deltaY < 0 ? 1 : -1; updateGearUI(); e.preventDefault(); } };
-        const mousedown = () => { car.isMoving = true; };
-        const mouseup = () => { car.isMoving = false; };
-        const mouseleaveCanvas = () => { car.isMoving = false; };
+        const keydown = (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                // Đánh lái
+                if (controlMode === 'hybrid') {
+                    if (e.key === 'a' || e.key === 'A') keys.A = true;
+                    if (e.key === 'd' || e.key === 'D') keys.D = true;
+                } else {
+                    if (e.key === 'ArrowLeft') keys.A = true;
+                    if (e.key === 'ArrowRight') keys.D = true;
+                }
+
+                // Ga
+                if (controlMode === 'kb') {
+                    if (e.key === ' ' || e.code === 'Space') {
+                        car.isMoving = true;
+                        e.preventDefault();
+                    }
+                }
+
+                // Số
+                if (controlMode === 'kb') {
+                    const k = e.key.toLowerCase();
+                    if (k === 'd') {
+                        car.gear = 1;
+                        updateGearUI();
+                    }
+                    if (k === 'r') {
+                        car.gear = -1;
+                        updateGearUI();
+                    }
+                }
+            }
+        };
+
+        const keyup = (e) => {
+            if (controlMode === 'hybrid') {
+                if (e.key === 'a' || e.key === 'A') keys.A = false;
+                if (e.key === 'd' || e.key === 'D') keys.D = false;
+            } else {
+                if (e.key === 'ArrowLeft') keys.A = false;
+                if (e.key === 'ArrowRight') keys.D = false;
+            }
+
+            if (controlMode === 'kb') {
+                if (e.key === ' ' || e.code === 'Space') car.isMoving = false;
+            }
+        };
+
+        const wheel = (e) => {
+            if (controlMode === 'hybrid' && !e.target.closest('.modal-backdrop')) {
+                car.gear = e.deltaY < 0 ? 1 : -1;
+                updateGearUI();
+                e.preventDefault();
+            }
+        };
+
+        const mousedown = (e) => {
+            if (controlMode === 'hybrid' && e.button === 0) car.isMoving = true;
+        };
+
+        const mouseup = () => {
+            if (controlMode === 'hybrid') car.isMoving = false;
+        };
+
+        const mouseleaveCanvas = () => {
+            if (controlMode === 'hybrid') car.isMoving = false;
+        };
+
         window.addEventListener('keydown', keydown);
         window.addEventListener('keyup', keyup);
         window.addEventListener('wheel', wheel, { passive: false });
