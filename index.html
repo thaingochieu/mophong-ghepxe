@@ -258,8 +258,8 @@
                 <div class="flex items-center justify-between">
                     <label class="text-gray-300">Chế độ điều khiển:</label>
                     <select id="cfgControlMode" class="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-white text-sm">
-                        <option value="kb" selected>Chỉ bàn phím</option>
-                        <option value="hybrid">Chuột + Bàn phím</option>
+                        <option value="kb">Chỉ bàn phím</option>
+                        <option value="hybrid" selected>Chuột + Bàn phím</option>
                     </select>
                 </div>
             </div>
@@ -467,8 +467,8 @@
     dom.btnReset.addEventListener('click', () => { if (activeMode) loadMode(activeMode); });
 
     // Initial load
-    // loadMode('ngang');
-    loadMode('doc');
+    loadMode('ngang');
+    // loadMode('doc');
 </script>
 </body>
 </html>

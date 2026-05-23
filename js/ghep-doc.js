@@ -6,24 +6,29 @@ function initGhepDoc(sharedDom, options = {}) {
     const COLLISION_FRONT_SCALE = 0.80;
     const COLLISION_REAR_SCALE = 0.72;
     const COLLISION_SIDE_SCALE = 0.72;
-    const STEERING_LOCAL_RATIO = { x: 0.22, y: -0.16 };
-    const DRIVER_SEAT_LOCAL_RATIO = { x: 0.02, y: -0.20 };
+    const STEERING_LOCAL_RATIO = { x: 0.50, y: -0.16 };
+    const DRIVER_SEAT_LOCAL_RATIO = { x: 0.30, y: -0.20 };
     const HUD_DASH_OPACITY_OVERLAP = 0.18;
     const HUD_RESTORE_DELAY_MS = 250;
     const STEER_ENTER_STRAIGHT_THRESHOLD = 0.015;
     const STEER_EXIT_STRAIGHT_THRESHOLD = 0.03;
     const GUIDE_DOT_RADIUS = 10;
+    const GUIDE_DOT_BLINK_INTERVAL_MS = 480;
+    const GUIDE_DOT_DEFAULT_PROXIMITY_PX = 160;
+    const GUIDE_DOT_COLOR_A = '#3ef838';
+    const GUIDE_DOT_COLOR_B = '#fb923c';
+    const GUIDE_HANDLE_SIZE_PX = 20;
     const RIGHT_ROAD_EXTRA_DEPTH_PX = 350;
-    // Tăng giá trị này để đẩy chuồng lên cao hơn mà không đổi kích thước chuồng.
     const SPOT_BOTTOM_GAP_PX = 28;
 
-    // Sử dụng canvas có sẵn từ DOM
+    // ========== DEBUG FLAG ==========
+    let DEBUG_MODE = true; // bật/tắt toàn bộ giao diện debug
+
     const canvas = sharedDom.canvas;
     const ctx = canvas.getContext('2d');
     const warningDiv = sharedDom.warningMsg;
     const carImage = sharedDom.carImg;
 
-    // Đảm bảo có thể dùng hàm từ common.js (dự phòng)
     const linesIntersect = window.linesIntersect || function(a,b,c,d,p,q,r,s) {
         const det = (c - a) * (s - q) - (r - p) * (d - b);
         if (det === 0) return false;
@@ -103,13 +108,11 @@ function initGhepDoc(sharedDom, options = {}) {
         return true;
     };
 
-    // ===== CẤU HÌNH HIỂN THỊ =====
     let showDimensions = options.showDimensions !== undefined ? options.showDimensions : true;
     let wheelOpacity = options.wheelOpacity !== undefined ? Number(options.wheelOpacity) : 0.15;
     let dashOpacity = options.dashOpacity !== undefined ? Number(options.dashOpacity) : 0.92;
-    let controlMode = options.controlMode || 'kb'; // 'kb' or 'hybrid'
+    let controlMode = options.controlMode || 'kb';
 
-    // Lưu để module có thể cập nhật từ index.html
     const applyWheelOpacity = (val) => {
         wheelOpacity = clamp01(val);
         document.documentElement.style.setProperty('--wheel-opacity', String(wheelOpacity));
@@ -117,7 +120,6 @@ function initGhepDoc(sharedDom, options = {}) {
     const applyDashOpacity = (val) => {
         dashOpacity = clamp01(val);
         document.documentElement.style.setProperty('--dash-opacity', String(dashOpacity));
-        // applyHudDashOpacity(isHudOverlapped); // Comment out central circle logic
     };
 
     window._currentGameModule = {
@@ -127,7 +129,13 @@ function initGhepDoc(sharedDom, options = {}) {
             draw();
         },
         setWheelOpacity: applyWheelOpacity,
-        setDashOpacity: applyDashOpacity
+        setDashOpacity: applyDashOpacity,
+        // cho phép bật/tắt debug từ console
+        setDebugMode: (val) => {
+            DEBUG_MODE = !!val;
+            draw();
+        },
+        getDebugMode: () => DEBUG_MODE
     };
     document.documentElement.style.setProperty('--wheel-opacity', String(wheelOpacity));
     document.documentElement.style.setProperty('--dash-opacity', String(dashOpacity));
@@ -159,6 +167,8 @@ function initGhepDoc(sharedDom, options = {}) {
     let isHudOverlapped = false;
     let hudRestoreTimer = null;
 
+    let guideDots = [];
+
     const carImageCrop = { sx: 0, sy: 0, sw: 0, sh: 0, ready: false };
 
     function calculateEnvironment() {
@@ -182,15 +192,12 @@ function initGhepDoc(sharedDom, options = {}) {
         ENV.rightRoadBottom = baseRoadBottom + RIGHT_ROAD_EXTRA_DEPTH_PX;
         ENV.spotBorderLeft = ENV.mapLeft + ENV.Ed + 20;
 
-        // Giữ nguyên kích thước chuồng, chỉ tịnh tiến chuồng + đoạn đường ngang đi vào theo trục dọc.
         const baseSpotBorderBottom = baseRoadBottom + (2 * MARGIN) + ENV.Ld;
         const desiredSpotBorderBottom = ENV.rightRoadBottom - SPOT_BOTTOM_GAP_PX;
         const spotVerticalOffset = desiredSpotBorderBottom - baseSpotBorderBottom;
         ENV.roadTop = baseRoadTop + spotVerticalOffset;
         ENV.roadBottom = ENV.roadTop + ENV.Ed;
 
-        // Chỉnh tay khoảng cách đáy chuồng với đáy đường dọc tại SPOT_BOTTOM_GAP_PX.
-        // Nhỏ hơn -> chuồng xuống sâu hơn; lớn hơn -> chuồng lên cao hơn.
         ENV.chipTop = ENV.roadBottom + MARGIN;
         ENV.chipBottom = ENV.chipTop + ENV.Ld;
         ENV.chipLeft = ENV.spotBorderLeft + MARGIN;
@@ -219,11 +226,137 @@ function initGhepDoc(sharedDom, options = {}) {
             {x1: ENV.spotBorderLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadBottom},
             {x1: ENV.mapLeft, y1: ENV.roadBottom, x2: ENV.mapLeft, y2: ENV.roadTop}
         ];
+
+        // Tất cả activationRect lưu ở WORLD coordinates
+        guideDots = [
+            {
+                x: ENV.mapLeft,
+                y: ENV.roadBottom - ENV.Ed * 0.2,
+                activationRect: {
+                    minX: 450,
+                    minY: 350,
+                    maxX: 650,
+                    maxY: 550
+                },
+                active: false,
+                blinkPhase: 0,
+                lastToggle: 0
+            },
+            {
+                x: ENV.chipLeft + ENV.Rd * 0.5,
+                y: ENV.chipBottom - ENV.Ld * -0.09,
+                activationRect: {
+                    minX: 330,
+                    minY: 400,
+                    maxX: 430,
+                    maxY: 550
+                },
+                active: false,
+                blinkPhase: 0,
+                lastToggle: 0
+            },
+            {
+                x: ENV.chipLeft + ENV.Rd * 1.15,
+                y: ENV.chipBottom - ENV.Ld * 0.72,
+                activationRect: {
+                    minX: 225,
+                    minY: 350,
+                    maxX: 320,
+                    maxY: 470
+                },
+                active: false,
+                blinkPhase: 0,
+                lastToggle: 0
+            }
+        ];
     }
+
+    // Cập nhật trạng thái chấm căn (dùng tâm hình học của xe)
+    function updateGuideDots(now) {
+        if (!guideDots || guideDots.length === 0) return;
+
+        const vCenterX = car.x + Math.cos(car.angle) * (ENV.carW * 0.28);
+        const vCenterY = car.y + Math.sin(car.angle) * (ENV.carW * 0.28);
+
+        const pointInRect = (px, py, rect) => {
+            if (!rect) return false;
+            return px >= rect.minX && px <= rect.maxX && py >= rect.minY && py <= rect.maxY;
+        };
+
+        for (const dot of guideDots) {
+            const wasActive = dot.active;
+            let isActive = false;
+
+            if (dot.activationRect) {
+                isActive = pointInRect(vCenterX, vCenterY, dot.activationRect);
+            } else if (dot.activationPoly && Array.isArray(dot.activationPoly) && dot.activationPoly.length >= 6) {
+                const poly = dot.activationPoly;
+                let inside = false;
+                for (let i = 0, j = poly.length - 2; i < poly.length; i += 2) {
+                    const xi = poly[i], yi = poly[i+1];
+                    const xj = poly[j], yj = poly[j+1];
+                    const intersect = ((yi > vCenterY) !== (yj > vCenterY)) && (vCenterX < (xj - xi) * (vCenterY - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                    j = i;
+                }
+                isActive = inside;
+            } else {
+                const dx = vCenterX - dot.x;
+                const dy = vCenterY - dot.y;
+                const dist = Math.hypot(dx, dy);
+                isActive = dist <= (dot.proximity || GUIDE_DOT_DEFAULT_PROXIMITY_PX);
+            }
+
+            dot.active = !!isActive;
+            if (dot.active) {
+                if (!wasActive) {
+                    dot.blinkPhase = 0;
+                    dot.lastToggle = now;
+                } else if (now - dot.lastToggle >= GUIDE_DOT_BLINK_INTERVAL_MS) {
+                    dot.blinkPhase = 1 - (dot.blinkPhase || 0);
+                    dot.lastToggle = now;
+                }
+            } else {
+                dot.blinkPhase = 0;
+                dot.lastToggle = 0;
+            }
+        }
+    }
+
+    function setDot1Activation(spec) {
+        if (!guideDots || !guideDots[0]) {
+            console.warn('guideDots not ready yet');
+            return;
+        }
+        const dot = guideDots[0];
+        if (Array.isArray(spec)) {
+            dot.activationPoly = spec.slice();
+            delete dot.activationRect;
+            console.log('Dot1 activation set to polygon');
+        } else if (spec && spec.activationPoly && Array.isArray(spec.activationPoly)) {
+            dot.activationPoly = spec.activationPoly.slice();
+            delete dot.activationRect;
+            console.log('Dot1 activation set to polygon');
+        } else if (spec && typeof spec.minX !== 'undefined') {
+            dot.activationRect = { minX: Number(spec.minX), minY: Number(spec.minY), maxX: Number(spec.maxX), maxY: Number(spec.maxY) };
+            delete dot.activationPoly;
+            console.log('Dot1 activation set to rect', dot.activationRect);
+        } else if (spec && Array.isArray(spec.points) && spec.points.length >= 6) {
+            dot.activationPoly = spec.points.slice();
+            delete dot.activationRect;
+            console.log('Dot1 activation set to polygon via spec.points');
+        } else {
+            console.warn('Invalid spec. Provide rect {minX,minY,maxX,maxY} or array [x1,y1,...]');
+            return;
+        }
+        draw();
+    }
+
+    try { window._currentGameModule = window._currentGameModule || {}; window._currentGameModule.setDot1Activation = setDot1Activation; } catch (e) {}
 
     function resetCarPosition() {
         car.x = ENV.rightRoadLeft + (ENV.Ed / 2);
-        car.y = ENV.rightRoadTop + (ENV.carW / 2) + 35;
+        car.y = ENV.rightRoadTop + (ENV.carW / 2);
         car.angle = Math.PI / 2;
         car.steeringTurns = 0;
         isSteerInStraightZone = true;
@@ -235,7 +368,6 @@ function initGhepDoc(sharedDom, options = {}) {
     }
 
     function updateGearUI() {
-        // Cập nhật hiển thị số trên HUD
         const gearText = car.gear === 1 ? "TIẾN" : "LÙI";
         if (sharedDom.hudGear) sharedDom.hudGear.innerText = gearText;
         if (sharedDom.gearDisplay) sharedDom.gearDisplay.innerText = gearText;
@@ -272,8 +404,8 @@ function initGhepDoc(sharedDom, options = {}) {
 
     function getCarCorners(cx = car.x, cy = car.y, cangle = car.angle) {
         const cos = Math.cos(cangle), sin = Math.sin(cangle);
-        const front = (ENV.carW / 2) * COLLISION_FRONT_SCALE;
-        const rear = (ENV.carW / 2) * COLLISION_REAR_SCALE;
+        const front = ENV.carW * 0.78 * COLLISION_FRONT_SCALE;
+        const rear = ENV.carW * 0.22 * COLLISION_REAR_SCALE;
         const halfSide = (ENV.carH / 2) * COLLISION_SIDE_SCALE;
         return [
             { x: cx + front*cos - halfSide*sin, y: cy + front*sin + halfSide*cos },
@@ -328,7 +460,7 @@ function initGhepDoc(sharedDom, options = {}) {
         }
         const displayTurns = isSteerInStraightZone ? 0 : car.steeringTurns;
         const turnsAbs = Math.abs(displayTurns).toFixed(2);
-        
+
         let steerText = "";
         if (displayTurns < 0) steerText = `Lái trái: ${turnsAbs}`;
         else if (displayTurns > 0) steerText = `Lái phải: ${turnsAbs}`;
@@ -336,18 +468,21 @@ function initGhepDoc(sharedDom, options = {}) {
 
         if (sharedDom.hudSteer) sharedDom.hudSteer.innerText = steerText;
         if (sharedDom.steerDisplay) sharedDom.steerDisplay.innerText = steerText;
-        
+
         sharedDom.wheelImg.style.transform = `rotate(${displayTurns * 360}deg)`;
     }
 
     function updateHudPosition() {
         if (!sharedDom.carHud) return;
-        const screenX = car.x + mapOffsetX;
-        const screenY = car.y + mapOffsetY;
-        
-        // Cập nhật vị trí HUD bám theo xe, lệch lên trên một chút
+
+        const vCenterX = car.x + Math.cos(car.angle) * (ENV.carW * 0.28);
+        const vCenterY = car.y + Math.sin(car.angle) * (ENV.carW * 0.28);
+
+        const screenX = vCenterX + mapOffsetX;
+        const screenY = vCenterY + mapOffsetY;
+
         sharedDom.carHud.style.left = `${screenX}px`;
-        sharedDom.carHud.style.top = `${screenY - 100}px`;
+        sharedDom.carHud.style.top = `${screenY - 110}px`;
         if (sharedDom.carHud.classList.contains('hidden')) {
             sharedDom.carHud.classList.remove('hidden');
         }
@@ -360,9 +495,10 @@ function initGhepDoc(sharedDom, options = {}) {
     function draw() {
         ctx.fillStyle = '#111827';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Vẽ map
+
         ctx.save();
         ctx.translate(mapOffsetX, mapOffsetY);
+
         // Vẽ đường
         ctx.beginPath();
         ctx.moveTo(ENV.mapLeft, ENV.roadTop);
@@ -389,60 +525,71 @@ function initGhepDoc(sharedDom, options = {}) {
         yellowLines.forEach(l => { ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); });
         ctx.strokeStyle = '#eab308'; ctx.lineWidth = 3; ctx.stroke();
 
-        // 2 chấm căn map dọc (điểm xanh) - chỉnh tay tại phần offset bên dưới nếu cần đúng thực tế hơn.
-        // Dot 1: gần tâm đáy ô ghép
-        // Dot 2: gần mép dưới bên trái ô ghép
-        const guideDots = [
-            {
-                x: ENV.mapLeft,
-                y: ENV.roadBottom - ENV.Ed * 0.2
-                // Chỉnh tay: tăng/giảm x,y để di chuyển Dot 1.
-            },
-            {
-                x: ENV.chipLeft + ENV.Rd * 1.15,
-                y: ENV.chipBottom - ENV.Ld * 0.72
-                // Chỉnh tay: tăng/giảm x,y để di chuyển Dot 2.
-            },
-            {
-                x: ENV.chipLeft + ENV.Rd * 0.5,
-                y: ENV.chipBottom - ENV.Ld * -0.09
-                // Chỉnh tay: tăng/giảm x,y để di chuyển Dot 3.
-            }
-        ];
+        // Vẽ chấm căn
         ctx.save();
-        ctx.fillStyle = '#39ff14';
-        ctx.shadowColor = 'rgba(57, 255, 20, 0.6)';
         ctx.shadowBlur = 16;
         for (const dot of guideDots) {
+            const color = dot.active ? (dot.blinkPhase ? GUIDE_DOT_COLOR_B : GUIDE_DOT_COLOR_A) : GUIDE_DOT_COLOR_A;
+            ctx.fillStyle = color;
+            ctx.shadowColor = color + '66';
             ctx.beginPath();
             ctx.arc(dot.x, dot.y, GUIDE_DOT_RADIUS, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.restore();
 
-        // Chú thích kích thước (bật/tắt theo config)
-        // ...existing code...
+        // --- DEBUG: vẽ activation rect và handle (chỉ khi DEBUG_MODE bật) ---
+        if (DEBUG_MODE && guideDots && guideDots.length) {
+            ctx.save();
+            const hs = GUIDE_HANDLE_SIZE_PX;
+            const half = Math.round(hs/2);
+            guideDots.forEach((gd, idx) => {
+                if (!gd.activationRect) return;
+                const r = gd.activationRect;
+                const drawX = r.minX;
+                const drawY = r.minY;
+                const drawW = r.maxX - r.minX;
+                const drawH = r.maxY - r.minY;
+                const strokeCol = idx === 0 ? 'rgba(56,189,248,0.9)' : (idx === 1 ? 'rgba(251,146,60,0.9)' : 'rgba(34,197,94,0.9)');
+                const fillCol = idx === 0 ? 'rgba(56,189,248,0.08)' : (idx === 1 ? 'rgba(251,146,60,0.08)' : 'rgba(34,197,94,0.08)');
+                const handleCol = idx === 0 ? 'rgba(56,189,248,0.95)' : (idx === 1 ? 'rgba(251,146,60,0.95)' : 'rgba(34,197,94,0.95)');
+                ctx.strokeStyle = strokeCol;
+                ctx.fillStyle = fillCol;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([6,6]);
+                ctx.fillRect(drawX, drawY, drawW, drawH);
+                ctx.strokeRect(drawX, drawY, drawW, drawH);
+                ctx.setLineDash([]);
+                ctx.fillStyle = handleCol;
+                ctx.fillRect(Math.round(drawX)-half, Math.round(drawY)-half, hs, hs);
+                ctx.fillRect(Math.round(drawX+drawW)-half, Math.round(drawY)-half, hs, hs);
+                ctx.fillRect(Math.round(drawX+drawW)-half, Math.round(drawY+drawH)-half, hs, hs);
+                ctx.fillRect(Math.round(drawX)-half, Math.round(drawY+drawH)-half, hs, hs);
+            });
+            ctx.restore();
+        }
+
         if (showDimensions) {
-            // ...existing code...
             ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 12px monospace';
             ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, ENV.mapLeft + 50, ENV.roadBottom + 20);
             ctx.save(); ctx.translate(ENV.rightRoadLeft - 15, ENV.roadTop - 40); ctx.rotate(-Math.PI/2); ctx.fillText(`Ed = ${ENV.Ed_m.toFixed(2)}m`, 0, 0); ctx.restore();
             ctx.fillStyle = '#fde047'; ctx.fillText(`Ld = ${ENV.Ld_m.toFixed(2)}m`, ENV.spotBorderRight + 15, ENV.chipTop + ENV.Ld/2);
             ctx.fillText(`Rd = ${ENV.Rd_m.toFixed(2)}m`, ENV.chipLeft + ENV.Rd/2, ENV.spotBorderBottom + 20);
         }
-        // Xe
+
+        // Vẽ xe
         ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.angle);
         if (carImage.complete && carImage.naturalWidth) {
             prepareCarImageCrop();
             if (carImageCrop.ready) {
-                ctx.drawImage(carImage, carImageCrop.sx, carImageCrop.sy, carImageCrop.sw, carImageCrop.sh, -ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+                ctx.drawImage(carImage, carImageCrop.sx, carImageCrop.sy, carImageCrop.sw, carImageCrop.sh, -ENV.carW * 0.22, -ENV.carH / 2, ENV.carW, ENV.carH);
             }
         } else {
-            ctx.fillStyle = 'red'; ctx.fillRect(-ENV.carW/2, -ENV.carH/2, ENV.carW, ENV.carH);
+            ctx.fillStyle = 'red'; ctx.fillRect(-ENV.carW * 0.22, -ENV.carH / 2, ENV.carW, ENV.carH);
         }
         ctx.restore();
 
-        // Đường căn kéo dài hết biên
+        // Đường căn
         const mapMinX = ENV.mapLeft;
         const mapMaxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
         const mapMinY = Math.min(ENV.roadTop, ENV.rightRoadTop);
@@ -460,7 +607,29 @@ function initGhepDoc(sharedDom, options = {}) {
         ctx.setLineDash([]);
         ctx.restore();
 
-        ctx.restore();
+        ctx.restore(); // hết translate map
+
+        // --- DEBUG: crosshair tâm xe và thông tin tọa độ (screen space) ---
+        if (DEBUG_MODE) {
+            const vCenterX = car.x + Math.cos(car.angle) * (ENV.carW * 0.28);
+            const vCenterY = car.y + Math.sin(car.angle) * (ENV.carW * 0.28);
+            const carCanvasX = Math.round(vCenterX + mapOffsetX);
+            const carCanvasY = Math.round(vCenterY + mapOffsetY);
+            const carWorldX = Number(vCenterX.toFixed(2));
+            const carWorldY = Number(vCenterY.toFixed(2));
+            const boxW = 260, boxH = 44;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(12, 12, boxW, boxH);
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.strokeRect(12, 12, boxW, boxH);
+            ctx.fillStyle = '#ffffff'; ctx.font = '12px monospace';
+            ctx.fillText(`Car center (canvas): ${carCanvasX}, ${carCanvasY}`, 18, 30);
+            ctx.fillText(`Car center (world): ${carWorldX}, ${carWorldY}`, 18, 46);
+            ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(carCanvasX - 6, carCanvasY); ctx.lineTo(carCanvasX + 6, carCanvasY);
+            ctx.moveTo(carCanvasX, carCanvasY - 6); ctx.lineTo(carCanvasX, carCanvasY + 6); ctx.stroke();
+            ctx.lineWidth = 1;
+        }
     }
 
     function updateGame(now) {
@@ -485,6 +654,7 @@ function initGhepDoc(sharedDom, options = {}) {
                 car.x = nextX; car.y = nextY; car.angle = nextAngle;
             }
         }
+        updateGuideDots(now);
         const currCorners = getCarCorners();
         const currEdges = getCarEdges(currCorners);
         hitYellow = hasAnyEdgeIntersection(currEdges, yellowLines);
@@ -503,22 +673,13 @@ function initGhepDoc(sharedDom, options = {}) {
     function resizeAndOffset() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        // ------------------------- ĐIỀU CHỈNH KÍCH THƯỚC MAP -------------------------
-        // Muốn thay đổi cách căn chỉnh map, sửa các dòng dưới đây:
-        // - mapOffsetX: căn giữa theo chiều ngang (có thể thay đổi để lệch trái/phải)
-        // - mapOffsetY: căn giữa theo chiều dọc. Bỏ /2 để dính sát mép trên.
         const minX = ENV.mapLeft;
         const maxX = Math.max(ENV.rightRoadRight, ENV.spotBorderRight);
         const minY = Math.min(ENV.roadTop, ENV.rightRoadTop);
         const maxY = Math.max(ENV.rightRoadBottom, ENV.spotBorderBottom);
         const mapW = maxX - minX, mapH = maxY - minY;
-        // Căn giữa chiều ngang (tự động)
         mapOffsetX = (canvas.width - mapW) / 2 - minX;
-        // Căn giữa chiều dọc (nếu muốn stretch full, dùng (canvas.height - mapH) / 2 - minY)
-        // Hiện tại đang căn giữa dọc. Để dính sát trên, thay bằng: mapOffsetY = -minY;
-        // Để dính sát dưới: mapOffsetY = canvas.height - mapH - minY;
         mapOffsetY = (canvas.height - mapH) / 2 - minY;
-        // ----------------------------------------------------------------------------
     }
 
     function loop(ts) {
@@ -538,7 +699,6 @@ function initGhepDoc(sharedDom, options = {}) {
     function setupEvents() {
         const keydown = (e) => {
             if (e.target.tagName !== 'INPUT') {
-                // Đánh lái
                 if (controlMode === 'hybrid') {
                     if (e.key === 'a' || e.key === 'A') keys.A = true;
                     if (e.key === 'd' || e.key === 'D') keys.D = true;
@@ -547,7 +707,6 @@ function initGhepDoc(sharedDom, options = {}) {
                     if (e.key === 'ArrowRight') keys.D = true;
                 }
 
-                // Ga
                 if (controlMode === 'kb') {
                     if (e.key === ' ' || e.code === 'Space') {
                         car.isMoving = true;
@@ -555,7 +714,6 @@ function initGhepDoc(sharedDom, options = {}) {
                     }
                 }
 
-                // Số
                 if (controlMode === 'kb') {
                     const k = e.key.toLowerCase();
                     if (k === 'd') {
@@ -608,20 +766,133 @@ function initGhepDoc(sharedDom, options = {}) {
         window.addEventListener('keyup', keyup);
         window.addEventListener('wheel', wheel, { passive: false });
         canvas.addEventListener('mousedown', mousedown);
+
+        const rightClick = (e) => {
+            if (e.target === canvas) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const canvasX = e.clientX - rect.left;
+                const canvasY = e.clientY - rect.top;
+                const worldX = canvasX - mapOffsetX;
+                const worldY = canvasY - mapOffsetY;
+                console.log('MOUSE POS:', { canvasX: Math.round(canvasX), canvasY: Math.round(canvasY), worldX: Number(worldX.toFixed(2)), worldY: Number(worldY.toFixed(2)) });
+                try { showWarning(`CURSOR: ${Math.round(canvasX)},${Math.round(canvasY)}  MAP:${worldX.toFixed(1)},${worldY.toFixed(1)}`, '#0ea5e9'); } catch (err) {}
+            }
+        };
+        canvas.addEventListener('contextmenu', rightClick);
         window.addEventListener('mouseup', mouseup);
         canvas.addEventListener('mouseleave', mouseleaveCanvas);
+
+        // Kéo thả activation rect (chỉ khi DEBUG_MODE bật và giữ Shift)
+        let activationDrag = null;
+        const pointDistance = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+        const onPointerDown = (e) => {
+            if (e.button !== 0) return;
+            if (!DEBUG_MODE) return;      // chỉ hoạt động khi debug bật
+            if (!e.shiftKey) return;
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const canvasY = e.clientY - rect.top;
+            if (!guideDots || !guideDots.length) return;
+            const hs = GUIDE_HANDLE_SIZE_PX;
+            for (let idx = 0; idx < guideDots.length; idx++) {
+                const gd = guideDots[idx];
+                if (!gd.activationRect) continue;
+                const ar = gd.activationRect;
+                const tl = { x: Math.round(ar.minX + mapOffsetX), y: Math.round(ar.minY + mapOffsetY) };
+                const tr = { x: Math.round(ar.maxX + mapOffsetX), y: Math.round(ar.minY + mapOffsetY) };
+                const br = { x: Math.round(ar.maxX + mapOffsetX), y: Math.round(ar.maxY + mapOffsetY) };
+                const bl = { x: Math.round(ar.minX + mapOffsetX), y: Math.round(ar.maxY + mapOffsetY) };
+                if (pointDistance(canvasX, canvasY, tl.x, tl.y) <= hs) {
+                    activationDrag = { dotIndex: idx, type: 'resize', corner: 'tl', startCanvasX: canvasX, startCanvasY: canvasY, origRect: Object.assign({}, ar) };
+                    e.preventDefault(); e.stopPropagation(); return;
+                }
+                if (pointDistance(canvasX, canvasY, tr.x, tr.y) <= hs) {
+                    activationDrag = { dotIndex: idx, type: 'resize', corner: 'tr', startCanvasX: canvasX, startCanvasY: canvasY, origRect: Object.assign({}, ar) };
+                    e.preventDefault(); e.stopPropagation(); return;
+                }
+                if (pointDistance(canvasX, canvasY, br.x, br.y) <= hs) {
+                    activationDrag = { dotIndex: idx, type: 'resize', corner: 'br', startCanvasX: canvasX, startCanvasY: canvasY, origRect: Object.assign({}, ar) };
+                    e.preventDefault(); e.stopPropagation(); return;
+                }
+                if (pointDistance(canvasX, canvasY, bl.x, bl.y) <= hs) {
+                    activationDrag = { dotIndex: idx, type: 'resize', corner: 'bl', startCanvasX: canvasX, startCanvasY: canvasY, origRect: Object.assign({}, ar) };
+                    e.preventDefault(); e.stopPropagation(); return;
+                }
+                const inside = canvasX >= tl.x && canvasX <= br.x && canvasY >= tl.y && canvasY <= br.y;
+                if (inside) {
+                    activationDrag = { dotIndex: idx, type: 'move', startCanvasX: canvasX, startCanvasY: canvasY, origRect: Object.assign({}, ar) };
+                    e.preventDefault(); e.stopPropagation(); return;
+                }
+            }
+        };
+
+        const onPointerMove = (e) => {
+            if (!activationDrag) return;
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = e.clientX - rect.left;
+            const canvasY = e.clientY - rect.top;
+            const dx = canvasX - activationDrag.startCanvasX;
+            const dy = canvasY - activationDrag.startCanvasY;
+            const idx = activationDrag.dotIndex;
+            if (!guideDots[idx]) return;
+            if (activationDrag.type === 'move') {
+                const newMinX = activationDrag.origRect.minX + dx;
+                const newMaxX = activationDrag.origRect.maxX + dx;
+                const newMinY = activationDrag.origRect.minY + dy;
+                const newMaxY = activationDrag.origRect.maxY + dy;
+                guideDots[idx].activationRect = { minX: newMinX, minY: newMinY, maxX: newMaxX, maxY: newMaxY };
+            } else if (activationDrag.type === 'resize') {
+                const ar = Object.assign({}, activationDrag.origRect);
+                if (activationDrag.corner === 'tl') { ar.minX += dx; ar.minY += dy; }
+                else if (activationDrag.corner === 'tr') { ar.maxX += dx; ar.minY += dy; }
+                else if (activationDrag.corner === 'br') { ar.maxX += dx; ar.maxY += dy; }
+                else if (activationDrag.corner === 'bl') { ar.minX += dx; ar.maxY += dy; }
+                const minX = Math.min(ar.minX, ar.maxX), maxX = Math.max(ar.minX, ar.maxX);
+                const minY = Math.min(ar.minY, ar.maxY), maxY = Math.max(ar.minY, ar.maxY);
+                guideDots[idx].activationRect = { minX, minY, maxX, maxY };
+            }
+            console.log('Dot' + (idx+1) + ' activationRect (world):', guideDots[idx].activationRect);
+            draw();
+            e.preventDefault();
+        };
+
+        const endPointer = (e) => {
+            if (!activationDrag) return;
+            const idx = activationDrag.dotIndex;
+            if (guideDots[idx] && guideDots[idx].activationRect) {
+                console.log('Dot' + (idx+1) + ' final:', guideDots[idx].activationRect);
+            }
+            activationDrag = null;
+        };
+
+        canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+        canvas.addEventListener('mousedown', onPointerDown, { passive: false, capture: true });
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('pointerup', endPointer);
+        window.addEventListener('mouseup', endPointer);
+
         sharedDom.btnReset.onclick = () => { resetCarPosition(); car.gear = 1; updateGearUI(); };
         sharedDom.cfgCarA.oninput = () => refreshParams();
         sharedDom.cfgCarB.oninput = () => refreshParams();
         sharedDom.cfgMoveSpeed.oninput = (e) => { GAME_CONFIG.moveSpeed = parseFloat(e.target.value); };
         sharedDom.cfgSteerSpeed.oninput = (e) => { GAME_CONFIG.steerSpeed = parseFloat(e.target.value); };
+
         return () => {
             window.removeEventListener('keydown', keydown);
             window.removeEventListener('keyup', keyup);
             window.removeEventListener('wheel', wheel);
             canvas.removeEventListener('mousedown', mousedown);
+            canvas.removeEventListener('contextmenu', rightClick);
             window.removeEventListener('mouseup', mouseup);
             canvas.removeEventListener('mouseleave', mouseleaveCanvas);
+            canvas.removeEventListener('pointerdown', onPointerDown);
+            canvas.removeEventListener('mousedown', onPointerDown, { capture: true });
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('mousemove', onPointerMove);
+            window.removeEventListener('pointerup', endPointer);
+            window.removeEventListener('mouseup', endPointer);
         };
     }
 
