@@ -18,7 +18,7 @@ function initGhepDoc(sharedDom, options = {}) {
             Ed: Ed_m * SCALE,
             Ld_m, Rd_m, Ed_m
         };
-        const MARGIN = 18;
+        const MARGIN = 10;
         ENV.mapLeft = 40;
         ENV.roadTop = 260;
         const baseRoadTop = ENV.roadTop;
@@ -43,10 +43,27 @@ function initGhepDoc(sharedDom, options = {}) {
     }
 
     function getYellowLines(ENV) {
+        const MARGIN = 10;
+        const EXTEND = 50;
+        const yLineTop = ENV.roadTop + MARGIN;          // Đường vàng phía trên
+        const yLineMouth = ENV.roadBottom - MARGIN;     // Đường vàng phía dưới (miệng chuồng)
+
         return [
-            { x1: ENV.chipLeft, y1: ENV.chipTop, x2: ENV.chipLeft, y2: ENV.chipBottom },
-            { x1: ENV.chipRight, y1: ENV.chipTop, x2: ENV.chipRight, y2: ENV.chipBottom },
-            { x1: ENV.chipLeft, y1: ENV.chipBottom, x2: ENV.chipRight, y2: ENV.chipBottom }
+            // 1. Vạch vàng chạy dọc theo lề trên (từ trái sang phải)
+            { x1: ENV.mapLeft + MARGIN, y1: yLineTop, x2: ENV.chipRight + EXTEND, y2: yLineTop },
+
+            // 2. Vạch vàng phía dưới – đoạn bên trái miệng chuồng
+            { x1: ENV.chipLeft - EXTEND, y1: yLineMouth, x2: ENV.chipLeft, y2: yLineMouth },
+
+            // 3. Chữ U của ô đỗ (cạnh trái)
+            { x1: ENV.chipLeft, y1: yLineMouth, x2: ENV.chipLeft, y2: ENV.chipBottom },
+            // 4. Chữ U – cạnh dưới
+            { x1: ENV.chipLeft, y1: ENV.chipBottom, x2: ENV.chipRight, y2: ENV.chipBottom },
+            // 5. Chữ U – cạnh phải
+            { x1: ENV.chipRight, y1: ENV.chipBottom, x2: ENV.chipRight, y2: yLineMouth },
+
+            // 6. Vạch vàng phía dưới – đoạn bên phải miệng chuồng
+            { x1: ENV.chipRight, y1: yLineMouth, x2: ENV.chipRight + EXTEND, y2: yLineMouth }
         ];
     }
 
@@ -71,19 +88,19 @@ function initGhepDoc(sharedDom, options = {}) {
         return [
             {
                 x: ENV.mapLeft,
-                y: ENV.roadBottom - ENV.Ed * 0.2,
+                y: ENV.roadBottom - ENV.Ed * 0.15,
                 activationRect: { minX: 450, minY: 350, maxX: 650, maxY: 550 },
                 active: false, blinkPhase: 0, lastToggle: 0
             },
             {
                 x: ENV.chipLeft + ENV.Rd * 0.5,
-                y: ENV.chipBottom - ENV.Ld * -0.09,
+                y: ENV.chipBottom - ENV.Ld * -0.06,
                 activationRect: { minX: 330, minY: 400, maxX: 430, maxY: 550 },
                 active: false, blinkPhase: 0, lastToggle: 0
             },
             {
-                x: ENV.chipLeft + ENV.Rd * 1.15,
-                y: ENV.chipBottom - ENV.Ld * 0.72,
+                x: ENV.chipLeft + ENV.Rd * 1.09,
+                y: ENV.chipBottom - ENV.Ld * 0.8,
                 activationRect: { minX: 225, minY: 350, maxX: 320, maxY: 470 },
                 active: false, blinkPhase: 0, lastToggle: 0
             }

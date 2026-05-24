@@ -116,6 +116,9 @@ const PARKING_BASE = {
     DRIVER_SEAT_LOCAL_RATIO: { x: 0.30, y: -0.20 },
     STEER_ENTER_STRAIGHT_THRESHOLD: 0.015,
     STEER_EXIT_STRAIGHT_THRESHOLD: 0.03,
+    MAX_STEER_TURNS: 1.7,
+    // Tune this value to change how long steering pauses at neutral (milliseconds).
+    STEER_CENTER_HOLD_MS: 200,
     GUIDE_DOT_RADIUS: 10,
     GUIDE_DOT_BLINK_INTERVAL_MS: 480,
     GUIDE_DOT_COLOR_A: '#3ef838',
@@ -148,6 +151,8 @@ function createParkingGame(spec) {
     const DRIVER_SEAT_LOCAL_RATIO = PARKING_BASE.DRIVER_SEAT_LOCAL_RATIO;
     const STEER_ENTER_STRAIGHT_THRESHOLD = PARKING_BASE.STEER_ENTER_STRAIGHT_THRESHOLD;
     const STEER_EXIT_STRAIGHT_THRESHOLD = PARKING_BASE.STEER_EXIT_STRAIGHT_THRESHOLD;
+    const MAX_STEER_TURNS = PARKING_BASE.MAX_STEER_TURNS;
+    const STEER_CENTER_HOLD_MS = PARKING_BASE.STEER_CENTER_HOLD_MS;
     const GUIDE_DOT_RADIUS = PARKING_BASE.GUIDE_DOT_RADIUS;
     const GUIDE_DOT_BLINK_INTERVAL_MS = PARKING_BASE.GUIDE_DOT_BLINK_INTERVAL_MS;
     const GUIDE_DOT_COLOR_A = PARKING_BASE.GUIDE_DOT_COLOR_A;
@@ -175,8 +180,9 @@ function createParkingGame(spec) {
     const GAME_CONFIG = {
         moveSpeed: parseFloat(sharedDom.cfgMoveSpeed.value),
         steerSpeed: parseFloat(sharedDom.cfgSteerSpeed.value),
-        maxSteerTurns: 2.5,
+        maxSteerTurns: MAX_STEER_TURNS,
         maxSteerAngleRad: 40 * Math.PI / 180,
+        steerCenterHoldMs: STEER_CENTER_HOLD_MS,
     };
 
     const car = {
@@ -192,6 +198,7 @@ function createParkingGame(spec) {
     let isSteerInStraightZone = true;
     let hasParkingSuccess = false;
     let hasExerciseCompleted = false;
+    let steerCenterHoldUntil = 0;
     let lastTime = 0;
     let animationId = null;
     let hudRestoreTimer = null;
@@ -466,9 +473,21 @@ function createParkingGame(spec) {
     function updateGame(now) {
         const dt = Math.min(0.033, (now - lastTime) / 1000 || 0);
         lastTime = now;
-        let steerDelta = GAME_CONFIG.steerSpeed * dt;
-        if (keys.A) car.steeringTurns -= steerDelta;
-        if (keys.D) car.steeringTurns += steerDelta;
+        const steerDirection = (keys.D ? 1 : 0) - (keys.A ? 1 : 0);
+        const steerDelta = GAME_CONFIG.steerSpeed * dt;
+        if (now < steerCenterHoldUntil) {
+            car.steeringTurns = 0;
+        } else if (steerDirection !== 0) {
+            const prevTurns = car.steeringTurns;
+            const nextTurns = prevTurns + (steerDirection * steerDelta);
+            const crossedCenter = (prevTurns < 0 && nextTurns > 0) || (prevTurns > 0 && nextTurns < 0);
+            if (crossedCenter) {
+                car.steeringTurns = 0;
+                steerCenterHoldUntil = now + GAME_CONFIG.steerCenterHoldMs;
+            } else {
+                car.steeringTurns = nextTurns;
+            }
+        }
         car.steeringTurns = Math.min(GAME_CONFIG.maxSteerTurns, Math.max(-GAME_CONFIG.maxSteerTurns, car.steeringTurns));
         updateSteeringUIState();
 
@@ -527,6 +546,7 @@ function createParkingGame(spec) {
         car.isMoving = false;
         hasParkingSuccess = false;
         hasExerciseCompleted = false;
+        steerCenterHoldUntil = 0;
         warningDiv.style.display = 'none';
         updateGearUI();
     }
